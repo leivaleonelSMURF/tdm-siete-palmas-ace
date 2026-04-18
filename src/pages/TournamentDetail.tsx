@@ -1,26 +1,108 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { ArrowLeft, Trophy, Users, Calendar, Swords, ListOrdered } from "lucide-react";
+import { ArrowLeft, Trophy, Users, Calendar, MapPin, Award } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { Avatar } from "@/components/Avatar";
-import { BracketWithLines } from "@/components/BracketWithLines";
-import { tournaments, matchesByTournament, playersById, players } from "@/lib/mockData";
+import { BracketWithLines, BracketMatch } from "@/components/BracketWithLines";
+import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
-type Tab = "bracket" | "matches" | "participants";
+type T = {
+  id: string; name: string; format: string; status: string;
+  starts_at: string | null; max_players: number | null;
+  description: string | null; location: string | null; prize: string | null;
+};
+type Reg = { id: string; player_id: string };
+type PlayerLite = { id: string; full_name: string; avatar_url: string | null; rating: number };
 
-const TABS: { key: Tab; label: string; icon: typeof Trophy }[] = [
-  { key: "bracket", label: "Bracket", icon: Trophy },
-  { key: "matches", label: "Partidos", icon: Swords },
-  { key: "participants", label: "Participantes", icon: ListOrdered },
-];
+const STATUS: Record<string, { label: string; cls: string }> = {
+  in_progress: { label: "En curso", cls: "bg-success/15 text-success" },
+  pending: { label: "Próximo", cls: "bg-primary/12 text-primary" },
+  finished: { label: "Finalizado", cls: "bg-muted text-muted-foreground" },
+};
 
 const TournamentDetail = () => {
   const { id = "" } = useParams();
-  const t = tournaments.find(x => x.id === id);
-  const [tab, setTab] = useState<Tab>("bracket");
+  const { player } = useAuth();
+  const [t, setT] = useState<T | null>(null);
+  const [matches, setMatches] = useState<BracketMatch[]>([]);
+  const [regs, setRegs] = useState<Reg[]>([]);
+  const [playersById, setPlayersById] = useState<Record<string, PlayerLite>>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  const load = async () => {
+    const [{ data: tour }, { data: ms }, { data: rs }] = await Promise.all([
+      supabase.from("tournaments").select("id, name, format, status, starts_at, max_players, description, location, prize").eq("id", id).maybeSingle(),
+      supabase.from("matches").select("id, tournament_id, player1_id, player2_id, player1_score, player2_score, winner_id, round, match_order").eq("tournament_id", id).order("match_order", { ascending: true }),
+      supabase.from("tournament_registrations").select("id, player_id").eq("tournament_id", id),
+    ]);
+    setT((tour as T) ?? null);
+    setMatches((ms as BracketMatch[]) ?? []);
+    setRegs((rs as Reg[]) ?? []);
+
+    const ids = new Set<string>();
+    (ms ?? []).forEach((m: any) => { if (m.player1_id) ids.add(m.player1_id); if (m.player2_id) ids.add(m.player2_id); });
+    (rs ?? []).forEach((r: any) => ids.add(r.player_id));
+    if (ids.size > 0) {
+      const { data: ps } = await supabase.from("players").select("id, full_name, avatar_url, rating").in("id", [...ids]);
+      const map: Record<string, PlayerLite> = {};
+      (ps ?? []).forEach((p: any) => { map[p.id] = p; });
+      setPlayersById(map);
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+    const channel = supabase
+      .channel(`tournament-${id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches", filter: `tournament_id=eq.${id}` }, load)
+      .on("postgres_changes", { event: "*", schema: "public", table: "tournament_registrations", filter: `tournament_id=eq.${id}` }, load)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const isRegistered = !!player && regs.some(r => r.player_id === player.id);
+  const isFull = !!t?.max_players && regs.length >= t.max_players;
+
+  const handleRegister = async () => {
+    if (!player) {
+      toast({ title: "Iniciá sesión", description: "Necesitás una cuenta para inscribirte.", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    if (isRegistered) {
+      const reg = regs.find(r => r.player_id === player.id);
+      if (reg) {
+        const { error } = await supabase.from("tournament_registrations").delete().eq("id", reg.id);
+        if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+        else toast({ title: "Inscripción cancelada" });
+      }
+    } else {
+      const { error } = await supabase.from("tournament_registrations").insert({ tournament_id: id, player_id: player.id });
+      if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+      else toast({ title: "¡Inscripto!", description: "Te anotamos en el torneo." });
+    }
+    setSubmitting(false);
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="container py-8 md:py-12 space-y-4">
+          <Skeleton className="h-40 w-full rounded-2xl" />
+          <Skeleton className="h-64 w-full rounded-2xl" />
+        </div>
+      </Layout>
+    );
+  }
 
   if (!t) {
     return (
@@ -33,11 +115,8 @@ const TournamentDetail = () => {
     );
   }
 
-  const tMatches = matchesByTournament(t.id);
-  // Participants for mock t1 — pull unique player ids from matches
-  const participantIds = Array.from(new Set(tMatches.flatMap(m => [m.player1_id, m.player2_id]).filter(Boolean))) as string[];
-  const participantList = participantIds.map(pid => playersById[pid]).filter(Boolean);
-  const fallbackParticipants = participantList.length ? participantList : players.slice(0, t.participants);
+  const status = STATUS[t.status] ?? STATUS.pending;
+  const registeredPlayers = regs.map(r => playersById[r.player_id]).filter(Boolean) as PlayerLite[];
 
   return (
     <Layout>
@@ -47,96 +126,89 @@ const TournamentDetail = () => {
         </Link>
 
         <div className="glass-card p-6 md:p-8">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <h1 className="font-heading font-bold text-3xl md:text-4xl">{t.name}</h1>
-              <div className="text-muted-foreground mt-1">{t.format}</div>
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <div className="min-w-0">
+              <span className={cn("inline-flex items-center text-xs font-heading font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full", status.cls)}>
+                {status.label}
+              </span>
+              <h1 className="font-heading font-bold text-3xl md:text-4xl mt-2 flex items-center gap-2">
+                <Trophy className="text-warning" /> {t.name}
+              </h1>
+              {t.description && <p className="text-muted-foreground mt-2 max-w-2xl">{t.description}</p>}
             </div>
-            <span className={cn(
-              "text-xs font-heading font-semibold uppercase tracking-wider px-3 py-1 rounded-full",
-              t.status === "in_progress" && "bg-success/15 text-success",
-              t.status === "pending" && "bg-primary/12 text-primary",
-              t.status === "finished" && "bg-muted text-muted-foreground",
-            )}>
-              {t.status === "in_progress" ? "En curso" : t.status === "pending" ? "Próximo" : "Finalizado"}
-            </span>
+            {t.status !== "finished" && (
+              <button
+                onClick={handleRegister}
+                disabled={submitting || (!isRegistered && isFull)}
+                className={cn(
+                  "tap-target inline-flex items-center gap-2 px-5 rounded-xl font-semibold shadow-soft transition-all active:opacity-75 disabled:opacity-50 disabled:cursor-not-allowed",
+                  isRegistered
+                    ? "bg-destructive/15 text-destructive hover:bg-destructive/25"
+                    : "bg-primary text-primary-foreground hover:bg-primary/90"
+                )}
+              >
+                {isRegistered ? "Cancelar inscripción" : isFull ? "Cupos agotados" : "Inscribirme"}
+              </button>
+            )}
           </div>
-          <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5"><Users className="size-4" />{t.participants} jugadores</span>
-            <span className="inline-flex items-center gap-1.5"><Calendar className="size-4" />{format(new Date(t.starts_at), "d 'de' MMMM yyyy", { locale: es })}</span>
+
+          <div className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+            {t.starts_at && (
+              <Info icon={Calendar} label="Fecha" value={format(new Date(t.starts_at), "d MMM yyyy", { locale: es })} />
+            )}
+            {t.location && <Info icon={MapPin} label="Lugar" value={t.location} />}
+            <Info icon={Users} label="Inscriptos" value={`${regs.length}${t.max_players ? ` / ${t.max_players}` : ""}`} />
+            {t.prize && <Info icon={Award} label="Premio" value={t.prize} />}
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="mt-6 inline-flex glass-card p-1 gap-1">
-          {TABS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={cn(
-                "tap-target px-4 py-2 rounded-lg text-sm font-medium inline-flex items-center gap-2 transition-all",
-                tab === key ? "bg-primary text-primary-foreground shadow-soft" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="size-4" />{label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-6 animate-fade-in" key={tab}>
-          {tab === "bracket" && (
+        {matches.length > 0 && (
+          <div className="mt-8">
+            <h2 className="font-heading font-bold text-2xl mb-6 flex items-center gap-2">
+              <Trophy className="text-primary" /> Bracket
+            </h2>
             <div className="glass-card p-6 pt-10">
-              {tMatches.length > 0
-                ? <BracketWithLines matches={tMatches} />
-                : <div className="text-center text-muted-foreground py-8">El bracket todavía no fue generado.</div>}
+              <BracketWithLines matches={matches} playersById={playersById} />
             </div>
-          )}
+          </div>
+        )}
 
-          {tab === "matches" && (
-            <div className="space-y-3">
-              {tMatches.length === 0 && <div className="glass-card p-8 text-center text-muted-foreground">Sin partidos.</div>}
-              {tMatches.map(m => {
-                const p1 = playersById[m.player1_id];
-                const p2 = playersById[m.player2_id];
-                return (
-                  <div key={m.id} className="glass-card p-4 flex items-center gap-3">
-                    <span className="text-xs uppercase tracking-wider text-muted-foreground w-20 shrink-0 font-heading font-semibold">{m.round}</span>
-                    <div className="flex-1 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Avatar name={p1?.full_name ?? ""} size={32} />
-                        <span className={cn("truncate text-sm", m.winner_id === p1?.id && "font-semibold")}>{p1?.full_name ?? "TBD"}</span>
-                      </div>
-                      <span className="font-heading font-bold tabular-nums text-base px-3 py-1 rounded-full bg-muted/60">
-                        {m.winner_id ? `${m.player1_score}–${m.player2_score}` : "—"}
-                      </span>
-                      <div className="flex items-center gap-2 min-w-0 flex-1 justify-end text-right">
-                        <span className={cn("truncate text-sm", m.winner_id === p2?.id && "font-semibold")}>{p2?.full_name ?? "TBD"}</span>
-                        <Avatar name={p2?.full_name ?? ""} size={32} />
-                      </div>
+        <div className="mt-8">
+          <h2 className="font-heading font-bold text-2xl mb-4 flex items-center gap-2">
+            <Users className="text-primary" /> Inscriptos ({regs.length})
+          </h2>
+          {registeredPlayers.length === 0 ? (
+            <div className="glass-card p-6 text-center text-muted-foreground">Aún no hay jugadores inscriptos.</div>
+          ) : (
+            <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {registeredPlayers.map((p, i) => (
+                <li key={p.id} className="animate-fade-in" style={{ animationDelay: `${i * 40}ms` }}>
+                  <Link to={`/jugador/${p.id}`} className="glass-card glass-card-hover p-3 flex items-center gap-3">
+                    <Avatar name={p.full_name} url={p.avatar_url} size={40} />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{p.full_name}</div>
+                      <div className="text-xs text-muted-foreground tabular-nums">Rating {p.rating}</div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {tab === "participants" && (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {fallbackParticipants.map(p => (
-                <Link key={p.id} to={`/jugador/${p.id}`} className="glass-card glass-card-hover p-3 flex items-center gap-3">
-                  <Avatar name={p.full_name} size={40} />
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm truncate">{p.full_name}</div>
-                    <div className="text-xs text-muted-foreground tabular-nums">Rating {p.rating}</div>
-                  </div>
-                </Link>
+                  </Link>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
       </section>
     </Layout>
   );
 };
+
+function Info({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-muted/40 px-3 py-2.5">
+      <div className="text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+        <Icon className="size-3" /> {label}
+      </div>
+      <div className="font-heading font-semibold mt-0.5 truncate">{value}</div>
+    </div>
+  );
+}
 
 export default TournamentDetail;
