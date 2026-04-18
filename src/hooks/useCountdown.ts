@@ -13,5 +13,6 @@ export function useCountdown(target: string | Date | null | undefined) {
   const days = Math.floor(diff / 86_400_000);
   const hours = Math.floor((diff % 86_400_000) / 3_600_000);
   const minutes = Math.floor((diff % 3_600_000) / 60_000);
-  return { days, hours, minutes };
+  const seconds = Math.floor((diff % 60_000) / 1000);
+  return { days, hours, minutes, seconds };
 }

@@ -1,6 +1,12 @@
 import { NavLink, Link } from "react-router-dom";
-import { Home, Trophy, BarChart3, Newspaper, Swords, User } from "lucide-react";
+import { Home, Trophy, BarChart3, Newspaper, Swords, User, LogIn, LogOut, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { Avatar } from "./Avatar";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const links = [
   { to: "/", label: "Inicio", icon: Home },
@@ -11,6 +17,8 @@ const links = [
 ];
 
 export function Navbar() {
+  const { user, player, signOut } = useAuth();
+
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/75 border-b border-border/60">
       <nav className="container flex items-center justify-between h-16">
@@ -20,8 +28,9 @@ export function Navbar() {
               <circle cx="9" cy="11" r="6" /><path d="m13 15 6 6" /><circle cx="19" cy="6" r="2" />
             </svg>
           </span>
-          <span>TDM <span className="text-accent">Siete Palmas</span></span>
+          <span className="hidden sm:inline">TDM <span className="text-accent">Siete Palmas</span></span>
         </Link>
+
         <ul className="hidden md:flex items-center gap-1">
           {links.map(({ to, label, icon: Icon }) => (
             <li key={to}>
@@ -39,12 +48,40 @@ export function Navbar() {
             </li>
           ))}
         </ul>
-        <Link
-          to="/jugador/p1"
-          className="tap-target hidden md:inline-flex items-center gap-2 px-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold shadow-soft hover:bg-primary/90 active:opacity-75 transition-colors"
-        >
-          <User className="size-4" />Mi perfil
-        </Link>
+
+        <div className="flex items-center gap-2">
+          {user && player ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-muted active:opacity-75 transition-colors tap-target">
+                <Avatar name={player.full_name} url={player.avatar_url} size={32} />
+                <span className="hidden sm:block text-sm font-medium max-w-[120px] truncate">{player.full_name}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel className="font-heading">{player.full_name}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link to={`/jugador/${player.id}`} className="cursor-pointer"><User className="size-4" /> Mi perfil</Link>
+                </DropdownMenuItem>
+                {player.is_admin && (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin" className="cursor-pointer"><Shield className="size-4" /> Panel admin</Link>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={signOut} className="cursor-pointer text-destructive focus:text-destructive">
+                  <LogOut className="size-4" /> Cerrar sesión
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Link
+              to="/auth"
+              className="tap-target inline-flex items-center gap-2 px-3 rounded-xl bg-primary text-primary-foreground text-sm font-semibold shadow-soft hover:bg-primary/90 active:opacity-75 transition-colors"
+            >
+              <LogIn className="size-4" /><span className="hidden sm:inline">Entrar</span>
+            </Link>
+          )}
+        </div>
       </nav>
     </header>
   );
