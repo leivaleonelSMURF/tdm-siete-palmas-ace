@@ -453,7 +453,7 @@ const Index = () => {
             </Link>
           </div>
           <div className="glass-card p-6 pt-10 overflow-x-auto">
-            <BracketWithLines matches={activeMatches as any} />
+            <BracketWithLines matches={activeMatches as any} playersById={playersById as any} />
           </div>
         </section>
       )}
