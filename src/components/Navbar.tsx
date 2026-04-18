@@ -3,6 +3,7 @@ import { Home, Trophy, BarChart3, Newspaper, Swords, User, LogIn, LogOut, Shield
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar } from "./Avatar";
+import { NotificationsBell } from "./NotificationsBell";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -50,6 +51,7 @@ export function Navbar() {
         </ul>
 
         <div className="flex items-center gap-2">
+          {user && player && <NotificationsBell />}
           {user && player ? (
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-muted active:opacity-75 transition-colors tap-target">
