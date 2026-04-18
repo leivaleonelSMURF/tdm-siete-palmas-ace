@@ -14,13 +14,433 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      challenges: {
+        Row: {
+          challenged_id: string
+          challenger_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          match_id: string | null
+          message: string | null
+          status: string
+        }
+        Insert: {
+          challenged_id: string
+          challenger_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          match_id?: string | null
+          message?: string | null
+          status?: string
+        }
+        Update: {
+          challenged_id?: string
+          challenger_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          match_id?: string | null
+          message?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "challenges_challenged_id_fkey"
+            columns: ["challenged_id"]
+            isOneToOne: false
+            referencedRelation: "player_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_challenged_id_fkey"
+            columns: ["challenged_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_challenger_id_fkey"
+            columns: ["challenger_id"]
+            isOneToOne: false
+            referencedRelation: "player_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_challenger_id_fkey"
+            columns: ["challenger_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "challenges_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      matches: {
+        Row: {
+          created_at: string
+          id: string
+          match_order: number | null
+          next_match_id: string | null
+          player1_id: string | null
+          player1_score: number | null
+          player2_id: string | null
+          player2_score: number | null
+          round: string | null
+          set_scores: Json | null
+          tournament_id: string | null
+          winner_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          match_order?: number | null
+          next_match_id?: string | null
+          player1_id?: string | null
+          player1_score?: number | null
+          player2_id?: string | null
+          player2_score?: number | null
+          round?: string | null
+          set_scores?: Json | null
+          tournament_id?: string | null
+          winner_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          match_order?: number | null
+          next_match_id?: string | null
+          player1_id?: string | null
+          player1_score?: number | null
+          player2_id?: string | null
+          player2_score?: number | null
+          round?: string | null
+          set_scores?: Json | null
+          tournament_id?: string | null
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "matches_next_match_id_fkey"
+            columns: ["next_match_id"]
+            isOneToOne: false
+            referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_player1_id_fkey"
+            columns: ["player1_id"]
+            isOneToOne: false
+            referencedRelation: "player_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_player1_id_fkey"
+            columns: ["player1_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_player2_id_fkey"
+            columns: ["player2_id"]
+            isOneToOne: false
+            referencedRelation: "player_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_player2_id_fkey"
+            columns: ["player2_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "player_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      news: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          image_url: string | null
+          published: boolean
+          title: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          published?: boolean
+          title: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          image_url?: string | null
+          published?: boolean
+          title?: string
+        }
+        Relationships: []
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          link: string | null
+          message: string | null
+          player_id: string
+          read: boolean
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string | null
+          player_id: string
+          read?: boolean
+          title: string
+          type: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          link?: string | null
+          message?: string | null
+          player_id?: string
+          read?: boolean
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "player_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          full_name: string
+          id: string
+          is_admin: boolean
+          losses: number
+          phone: string | null
+          rating: number
+          user_id: string | null
+          wins: number
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          full_name: string
+          id?: string
+          is_admin?: boolean
+          losses?: number
+          phone?: string | null
+          rating?: number
+          user_id?: string | null
+          wins?: number
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_admin?: boolean
+          losses?: number
+          phone?: string | null
+          rating?: number
+          user_id?: string | null
+          wins?: number
+        }
+        Relationships: []
+      }
+      tournament_registrations: {
+        Row: {
+          created_at: string
+          id: string
+          player_id: string
+          status: string
+          tournament_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          player_id: string
+          status?: string
+          tournament_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          player_id?: string
+          status?: string
+          tournament_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tournament_registrations_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "player_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_registrations_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tournament_registrations_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tournaments: {
+        Row: {
+          challonge_slug: string | null
+          created_at: string
+          description: string | null
+          format: string
+          id: string
+          location: string | null
+          max_players: number | null
+          name: string
+          prize: string | null
+          starts_at: string | null
+          status: string
+        }
+        Insert: {
+          challonge_slug?: string | null
+          created_at?: string
+          description?: string | null
+          format?: string
+          id?: string
+          location?: string | null
+          max_players?: number | null
+          name: string
+          prize?: string | null
+          starts_at?: string | null
+          status?: string
+        }
+        Update: {
+          challonge_slug?: string | null
+          created_at?: string
+          description?: string | null
+          format?: string
+          id?: string
+          location?: string | null
+          max_players?: number | null
+          name?: string
+          prize?: string | null
+          starts_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
-      [_ in never]: never
+      player_stats: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string | null
+          full_name: string | null
+          id: string | null
+          is_admin: boolean | null
+          losses: number | null
+          rating: number | null
+          total_matches: number | null
+          user_id: string | null
+          win_pct: number | null
+          wins: number | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_admin?: boolean | null
+          losses?: number | null
+          rating?: number | null
+          total_matches?: never
+          user_id?: string | null
+          win_pct?: never
+          wins?: number | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          full_name?: string | null
+          id?: string | null
+          is_admin?: boolean | null
+          losses?: number | null
+          rating?: number | null
+          total_matches?: never
+          user_id?: string | null
+          win_pct?: never
+          wins?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      [_ in never]: never
+      current_player_id: { Args: never; Returns: string }
+      is_admin: { Args: { _uid: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
