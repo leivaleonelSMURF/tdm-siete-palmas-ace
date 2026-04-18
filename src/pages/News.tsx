@@ -1,15 +1,39 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Search, Newspaper } from "lucide-react";
 import { Layout } from "@/components/Layout";
 import { NewsCategoryBadge } from "@/components/NewsCategoryBadge";
-import { news } from "@/lib/mockData";
+import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
+
+type N = { id: string; title: string; content: string; image_url: string | null; created_at: string };
 
 const News = () => {
   const [q, setQ] = useState("");
-  const list = q ? news.filter(n => n.title.toLowerCase().includes(q.toLowerCase())) : news;
+  const [list, setList] = useState<N[] | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      const { data } = await supabase
+        .from("news")
+        .select("id, title, content, image_url, created_at")
+        .eq("published", true)
+        .order("created_at", { ascending: false });
+      if (mounted) setList((data as N[]) ?? []);
+    };
+    load();
+    const channel = supabase
+      .channel("news-list")
+      .on("postgres_changes", { event: "*", schema: "public", table: "news" }, load)
+      .subscribe();
+    return () => { mounted = false; supabase.removeChannel(channel); };
+  }, []);
+
+  const filtered = (list ?? []).filter(n => !q || n.title.toLowerCase().includes(q.toLowerCase()));
+
   return (
     <Layout>
       <section className="container py-8 md:py-12">
@@ -28,21 +52,31 @@ const News = () => {
           />
         </div>
 
-        <div className="mt-6 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {list.map((n, i) => (
-            <Link key={n.id} to={`/noticia/${n.id}`} className="glass-card glass-card-hover overflow-hidden group animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
-              <div className="aspect-[16/10] overflow-hidden bg-muted">
-                {n.image_url && <img src={n.image_url} alt={n.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />}
-              </div>
-              <div className="p-4">
-                <NewsCategoryBadge title={n.title} className="mb-2" />
-                <h3 className="font-heading font-semibold text-balance">{n.title}</h3>
-                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{n.excerpt}</p>
-                <div className="text-xs text-muted-foreground mt-2">{format(new Date(n.created_at), "d MMM yyyy", { locale: es })}</div>
-              </div>
-            </Link>
-          ))}
-        </div>
+        {list === null ? (
+          <div className="mt-6 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-72 rounded-2xl" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="mt-10 glass-card p-10 text-center text-muted-foreground">
+            {q ? "Sin resultados." : "Aún no hay noticias publicadas."}
+          </div>
+        ) : (
+          <div className="mt-6 grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filtered.map((n, i) => (
+              <Link key={n.id} to={`/noticia/${n.id}`} className="glass-card glass-card-hover overflow-hidden group animate-fade-in" style={{ animationDelay: `${i * 60}ms` }}>
+                <div className="aspect-[16/10] overflow-hidden bg-muted">
+                  {n.image_url && <img src={n.image_url} alt={n.title} loading="lazy" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />}
+                </div>
+                <div className="p-4">
+                  <NewsCategoryBadge title={n.title} className="mb-2" />
+                  <h3 className="font-heading font-semibold text-balance">{n.title}</h3>
+                  <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{n.content.slice(0, 140)}</p>
+                  <div className="text-xs text-muted-foreground mt-2">{format(new Date(n.created_at), "d MMM yyyy", { locale: es })}</div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
       </section>
     </Layout>
   );
