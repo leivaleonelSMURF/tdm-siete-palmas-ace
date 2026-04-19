@@ -17,9 +17,9 @@ void main() {
 
     vec3 transformed = position;
 
-    transformed.x += sin(time + position.y) * 0.2 * waveFactor;
-    transformed.y += cos(time + position.z) * 0.08 * waveFactor;
-    transformed.z += sin(time + position.x) * 0.15 * waveFactor;
+    transformed.x += sin(time + position.y) * 0.3 * waveFactor;
+    transformed.y += cos(time + position.z) * 0.1 * waveFactor;
+    transformed.z += sin(time + position.x) * 0.2 * waveFactor;
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
 }
@@ -94,7 +94,7 @@ class AsciiFilter {
     this.invert = invert ?? true;
     this.fontSize = fontSize ?? 12;
     this.fontFamily = fontFamily ?? "'Courier New', monospace";
-    this.charset = charset ?? '@%#*+=-:. ';
+    this.charset = charset ?? ' .:-=+*#%@';
 
     if (this.context) {
       (this.context as any).webkitImageSmoothingEnabled = false;
@@ -134,12 +134,9 @@ class AsciiFilter {
     this.pre.style.position = 'absolute';
     this.pre.style.left = '0';
     this.pre.style.top = '0';
-    this.pre.style.width = '100%';
-    this.pre.style.height = '100%';
     this.pre.style.zIndex = '9';
     this.pre.style.backgroundAttachment = 'fixed';
-    this.pre.style.mixBlendMode = 'lighten';
-    this.pre.style.overflow = 'hidden';
+    this.pre.style.mixBlendMode = 'screen';
   }
 
   render(scene, camera) {
@@ -183,14 +180,14 @@ class AsciiFilter {
           const i = x * 4 + y * 4 * w;
           const [r, g, b, a] = [imgData[i], imgData[i + 1], imgData[i + 2], imgData[i + 3]];
 
-          if (a < 128) {
+          if (a === 0) {
             str += ' ';
             continue;
           }
 
           let gray = (0.3 * r + 0.6 * g + 0.1 * b) / 255;
-          let idx = Math.floor(gray * (this.charset.length - 1));
-          if (this.invert) idx = this.charset.length - idx - 1;
+          let idx = Math.floor((1 - gray) * (this.charset.length - 1));
+          if (!this.invert) idx = this.charset.length - idx - 1;
           str += this.charset[idx];
         }
         str += '\n';
@@ -228,8 +225,8 @@ class CanvasTxt {
     this.context.font = this.font;
     const metrics = this.context.measureText(this.txt);
 
-    const textWidth = Math.ceil(metrics.width) + 40;
-    const textHeight = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent) + 40;
+    const textWidth = Math.ceil(metrics.width) + 20;
+    const textHeight = Math.ceil(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent) + 20;
 
     this.canvas.width = textWidth;
     this.canvas.height = textHeight;
@@ -239,14 +236,11 @@ class CanvasTxt {
     this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.context.fillStyle = this.color;
     this.context.font = this.font;
-    this.context.textAlign = 'center';
-    this.context.textBaseline = 'middle';
 
     const metrics = this.context.measureText(this.txt);
-    const xPos = this.canvas.width / 2;
-    const yPos = this.canvas.height / 2;
+    const yPos = 10 + metrics.actualBoundingBoxAscent;
 
-    this.context.fillText(this.txt, xPos, yPos);
+    this.context.fillText(this.txt, 10, yPos);
   }
 
   get width() {
@@ -302,10 +296,9 @@ class CanvAscii {
     this.enableWaves = !!enableWaves;
 
     this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 1, 1000);
-    this.camera.position.z = 25;
+    this.camera.position.z = 30;
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x000000);
     this.mouse = { x: this.width / 2, y: this.height / 2 };
 
     this.onMouseMove = this.onMouseMove.bind(this);
@@ -335,14 +328,13 @@ class CanvAscii {
 
     this.texture = new THREE.CanvasTexture(this.textCanvas.texture);
     this.texture.minFilter = THREE.NearestFilter;
-    this.texture.magFilter = THREE.NearestFilter;
 
     const textAspect = this.textCanvas.width / this.textCanvas.height;
     const baseH = this.planeBaseHeight;
     const planeW = baseH * textAspect;
     const planeH = baseH;
 
-    this.geometry = new THREE.PlaneGeometry(planeW, planeH, 48, 48);
+    this.geometry = new THREE.PlaneGeometry(planeW, planeH, 64, 64);
     this.material = new THREE.ShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -366,8 +358,8 @@ class CanvAscii {
 
     this.filter = new AsciiFilter(this.renderer, {
       fontFamily: 'IBM Plex Mono',
-      fontSize: 14,
-      invert: true
+      fontSize: 10,
+      invert: false
     });
 
     this.container.appendChild(this.filter.domElement);
@@ -422,11 +414,11 @@ class CanvAscii {
   }
 
   updateRotation() {
-    const x = Math.map(this.mouse.y, 0, this.height, 0.3, -0.3);
-    const y = Math.map(this.mouse.x, 0, this.width, -0.3, 0.3);
+    const x = Math.map(this.mouse.y, 0, this.height, 0.4, -0.4);
+    const y = Math.map(this.mouse.x, 0, this.width, -0.4, 0.4);
 
-    this.mesh.rotation.x += (x - this.mesh.rotation.x) * 0.08;
-    this.mesh.rotation.y += (y - this.mesh.rotation.y) * 0.08;
+    this.mesh.rotation.x += (x - this.mesh.rotation.x) * 0.1;
+    this.mesh.rotation.y += (y - this.mesh.rotation.y) * 0.1;
   }
 
   clear() {
@@ -590,24 +582,15 @@ export default function ASCIIText({
           user-select: none;
           padding: 0;
           line-height: 1em;
-          text-align: center;
+          text-align: left;
           position: absolute;
           left: 0;
           top: 0;
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: linear-gradient(135deg, #ff6188 0%, #fc9867 50%, #ffd866 100%);
-          background-attachment: fixed;
-          -webkit-text-fill-color: transparent;
-          -webkit-background-clip: text;
-          background-clip: text;
           z-index: 9;
-          mix-blend-mode: lighten;
-          font-weight: 600;
-          letter-spacing: -0.05em;
+          background-attachment: fixed;
+          color: #ff6188;
+          mix-blend-mode: screen;
+          font-weight: 500;
         }
       `}</style>
     </div>
