@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Bell, Check, Trophy, Swords, Newspaper, Sparkles } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -26,10 +26,37 @@ const TYPE_ICON: Record<string, any> = {
   news: Newspaper,
 };
 
+// Solicitar permiso para notificaciones push
+const requestNotificationPermission = async () => {
+  if (!("Notification" in window)) {
+    console.log("Este navegador no soporta notificaciones");
+    return false;
+  }
+  if (Notification.permission === "granted") {
+    return true;
+  }
+  if (Notification.permission !== "denied") {
+    const permission = await Notification.requestPermission();
+    return permission === "granted";
+  }
+  return false;
+};
+
+// Mostrar notificación del sistema
+const showSystemNotification = (title: string, body: string, link?: string) => {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const notification = new Notification(title, { body, icon: "/favicon.ico" });
+  notification.onclick = () => {
+    if (link) window.location.href = link;
+    notification.close();
+  };
+};
+
 export function NotificationsBell() {
   const { player } = useAuth();
   const [items, setItems] = useState<N[]>([]);
   const [open, setOpen] = useState(false);
+  const lastNotifIdRef = useRef<string | null>(null);
 
   const load = async () => {
     if (!player) return;
@@ -39,17 +66,28 @@ export function NotificationsBell() {
       .eq("player_id", player.id)
       .order("created_at", { ascending: false })
       .limit(10);
-    setItems((data as N[]) ?? []);
+    const newItems = (data as N[]) ?? [];
+    // Si hay una nueva notificación (la primera de la lista es más reciente)
+    if (newItems.length > 0 && lastNotifIdRef.current !== newItems[0].id) {
+      const newest = newItems[0];
+      if (!newest.read) {
+        showSystemNotification(newest.title, newest.message || "Tocá para ver", newest.link || undefined);
+      }
+      lastNotifIdRef.current = newest.id;
+    }
+    setItems(newItems);
   };
 
   useEffect(() => {
     if (!player) { setItems([]); return; }
     load();
+    // Solicitar permiso para notificaciones al cargar el componente
+    requestNotificationPermission();
     const channel = supabase
       .channel(`notifs-${player.id}`)
       .on("postgres_changes",
         { event: "*", schema: "public", table: "notifications", filter: `player_id=eq.${player.id}` },
-        load
+        () => load()
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
