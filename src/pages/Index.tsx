@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import {
   ChevronRight, Crown, Flame, Trophy, Calendar, ArrowRight,
-  TrendingUp, Swords, BarChart3, Users, ArrowUpRight, Bell,
+  Swords, BarChart3, Users, ArrowUpRight, Bell,
   Sun, Cloud, CloudRain, CloudSnow, CloudFog, Zap, LogIn,
+  AlertTriangle, Activity,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -57,13 +58,34 @@ function calcStreak(playerId: string, matches: MatchRow[]): number {
   return s;
 }
 
-function PodiumCard({ player, displayIdx }: { player: PlayerRow; displayIdx: number }) {
+/** Sparkline determinística desde rating + win/loss recientes */
+function buildSparkValues(p: PlayerRow, matches: MatchRow[]): number[] {
+  const mine = matches
+    .filter(m => m.winner_id && (m.player1_id === p.id || m.player2_id === p.id))
+    .sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at))
+    .slice(-12);
+  if (mine.length === 0) return [p.rating, p.rating];
+  let r = p.rating - mine.length * 4;
+  const out: number[] = [r];
+  for (const m of mine) {
+    r += m.winner_id === p.id ? 6 : -4;
+    out.push(r);
+  }
+  return out;
+}
+
+function PodiumCard({
+  player, displayIdx, matchesForSpark, delay,
+}: {
+  player: PlayerRow; displayIdx: number; matchesForSpark: MatchRow[]; delay: string;
+}) {
   const realRank = displayIdx === 0 ? 2 : displayIdx === 1 ? 1 : 3;
   const platforms = ["bg-silver", "bg-gold", "bg-bronze"];
   const platformH = ["h-16", "h-24", "h-10"];
   const topPad = ["pt-8", "pt-2", "pt-14"];
+  const spark = useMemo(() => buildSparkValues(player, matchesForSpark), [player, matchesForSpark]);
   return (
-    <div className={cn("flex flex-col items-center", topPad[displayIdx])}>
+    <div className={cn("flex flex-col items-center animate-slide-up", topPad[displayIdx])} style={{ animationDelay: delay }}>
       <Link to={`/jugador/${player.id}`} className="w-full glass-card glass-card-hover p-3 md:p-4 text-center">
         <div className="relative inline-block">
           <Avatar name={player.full_name} url={player.avatar_url} size={56} ring />
@@ -73,6 +95,9 @@ function PodiumCard({ player, displayIdx }: { player: PlayerRow; displayIdx: num
         </div>
         <div className="mt-2 font-heading font-semibold text-sm truncate">{player.full_name}</div>
         <div className="text-xs text-muted-foreground tabular-nums">{player.rating}</div>
+        <div className="mt-1.5 flex justify-center">
+          <Sparkline values={spark} width={80} height={20} />
+        </div>
       </Link>
       <div className={cn("w-full rounded-t-lg mt-2 grid place-items-center text-primary-foreground font-heading font-bold", platformH[displayIdx], platforms[displayIdx])}>
         {realRank}°
@@ -105,6 +130,7 @@ const Index = () => {
   const { weather } = useWeather();
 
   const [topPlayers, setTopPlayers] = useState<PlayerRow[] | null>(null);
+  const [extraPlayers, setExtraPlayers] = useState<PlayerRow[]>([]);
   const [recentMatches, setRecentMatches] = useState<MatchRow[] | null>(null);
   const [allMatchesForStreaks, setAllMatchesForStreaks] = useState<MatchRow[]>([]);
   const [counts, setCounts] = useState({ players: 0, matches: 0, tournaments: 0 });
@@ -113,47 +139,138 @@ const Index = () => {
   const [activeMatches, setActiveMatches] = useState<MatchRow[]>([]);
   const [news, setNews] = useState<NewsRow[]>([]);
   const [myRank, setMyRank] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
+  // Mapa completo: top + extras (jugadores que aparecen en partidos pero no están en el top)
   const playersById = useMemo(() => {
     const map: Record<string, PlayerRow> = {};
-    (topPlayers ?? []).forEach(p => { map[p.id] = p; });
+    [...(topPlayers ?? []), ...extraPlayers].forEach(p => { map[p.id] = p; });
     return map;
-  }, [topPlayers]);
+  }, [topPlayers, extraPlayers]);
 
-  const fetchAll = async () => {
-    const [
-      topRes, recentRes, allMatchesRes,
-      pCount, mCount, tCount,
-      upRes, actRes, newsRes,
-    ] = await Promise.all([
-      supabase.from("players").select("id, full_name, rating, avatar_url, wins, losses").order("rating", { ascending: false }).limit(20),
-      supabase.from("matches").select("*").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(10),
-      supabase.from("matches").select("id, player1_id, player2_id, winner_id, created_at, tournament_id, player1_score, player2_score, round, match_order, set_scores, next_match_id").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(200),
-      supabase.from("players").select("*", { count: "exact", head: true }),
-      supabase.from("matches").select("*", { count: "exact", head: true }).not("winner_id", "is", null),
-      supabase.from("tournaments").select("*", { count: "exact", head: true }),
-      supabase.from("tournaments").select("id, name, status, starts_at, format").eq("status", "pending").order("starts_at", { ascending: true, nullsFirst: false }).limit(1).maybeSingle(),
-      supabase.from("tournaments").select("id, name, status, starts_at, format").eq("status", "in_progress").order("created_at", { ascending: false }).limit(1).maybeSingle(),
-      supabase.from("news").select("*").eq("published", true).order("created_at", { ascending: false }).limit(4),
-    ]);
-
-    setTopPlayers((topRes.data as PlayerRow[]) ?? []);
-    setRecentMatches((recentRes.data as MatchRow[]) ?? []);
-    setAllMatchesForStreaks((allMatchesRes.data as MatchRow[]) ?? []);
-    setCounts({ players: pCount.count ?? 0, matches: mCount.count ?? 0, tournaments: tCount.count ?? 0 });
-    setUpcoming(upRes.data as TournamentRow | null);
-    setActive(actRes.data as TournamentRow | null);
-    setNews((newsRes.data as NewsRow[]) ?? []);
-
-    if (actRes.data?.id) {
-      const { data: am } = await supabase.from("matches").select("*").eq("tournament_id", actRes.data.id).order("match_order");
-      setActiveMatches((am as MatchRow[]) ?? []);
-    } else {
-      setActiveMatches([]);
+  /** Carga de jugadores faltantes referenciados por partidos */
+  const fetchMissingPlayers = useCallback(async (
+    knownIds: Set<string>,
+    matchesArrays: MatchRow[][],
+  ) => {
+    const missing = new Set<string>();
+    matchesArrays.forEach(arr =>
+      arr.forEach(m => {
+        if (m.player1_id && !knownIds.has(m.player1_id)) missing.add(m.player1_id);
+        if (m.player2_id && !knownIds.has(m.player2_id)) missing.add(m.player2_id);
+      })
+    );
+    if (missing.size === 0) {
+      setExtraPlayers([]);
+      return;
     }
-  };
+    const { data } = await supabase
+      .from("players")
+      .select("id, full_name, rating, avatar_url, wins, losses")
+      .in("id", Array.from(missing));
+    setExtraPlayers((data as PlayerRow[]) ?? []);
+  }, []);
 
-  useEffect(() => { fetchAll(); }, []);
+  // Fetchers selectivos
+  const fetchTopPlayers = useCallback(async () => {
+    const { data } = await supabase
+      .from("players")
+      .select("id, full_name, rating, avatar_url, wins, losses")
+      .order("rating", { ascending: false })
+      .limit(20);
+    setTopPlayers((data as PlayerRow[]) ?? []);
+    return (data as PlayerRow[]) ?? [];
+  }, []);
+
+  const fetchRecentMatches = useCallback(async () => {
+    const { data } = await supabase
+      .from("matches")
+      .select("*")
+      .not("winner_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(10);
+    const arr = (data as MatchRow[]) ?? [];
+    setRecentMatches(arr);
+    return arr;
+  }, []);
+
+  const fetchActiveMatches = useCallback(async (tournamentId: string) => {
+    const { data } = await supabase
+      .from("matches")
+      .select("*")
+      .eq("tournament_id", tournamentId)
+      .order("match_order");
+    const arr = (data as MatchRow[]) ?? [];
+    setActiveMatches(arr);
+    return arr;
+  }, []);
+
+  const fetchAll = useCallback(async () => {
+    setError(null);
+    try {
+      // News con fallback: intento con published; si la columna no existe (PGRST), reintento sin filtro
+      let newsData: NewsRow[] = [];
+      try {
+        const { data, error: nErr } = await supabase
+          .from("news").select("*").eq("published", true)
+          .order("created_at", { ascending: false }).limit(4);
+        if (nErr) throw nErr;
+        newsData = (data as NewsRow[]) ?? [];
+      } catch {
+        const { data } = await supabase
+          .from("news").select("*")
+          .order("created_at", { ascending: false }).limit(4);
+        newsData = (data as NewsRow[]) ?? [];
+      }
+
+      const [
+        topRes, recentRes, allMatchesRes,
+        pCount, mCount, tCount,
+        upRes, actRes,
+      ] = await Promise.all([
+        supabase.from("players").select("id, full_name, rating, avatar_url, wins, losses").order("rating", { ascending: false }).limit(20),
+        supabase.from("matches").select("*").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(10),
+        supabase.from("matches").select("id, player1_id, player2_id, winner_id, created_at, tournament_id, player1_score, player2_score, round, match_order, set_scores, next_match_id").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(200),
+        supabase.from("players").select("*", { count: "exact", head: true }),
+        supabase.from("matches").select("*", { count: "exact", head: true }).not("winner_id", "is", null),
+        supabase.from("tournaments").select("*", { count: "exact", head: true }),
+        supabase.from("tournaments").select("id, name, status, starts_at, format").eq("status", "pending").order("starts_at", { ascending: true, nullsFirst: false }).limit(1).maybeSingle(),
+        supabase.from("tournaments").select("id, name, status, starts_at, format").eq("status", "in_progress").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      ]);
+
+      const topData = (topRes.data as PlayerRow[]) ?? [];
+      const recentData = (recentRes.data as MatchRow[]) ?? [];
+      const allMatches = (allMatchesRes.data as MatchRow[]) ?? [];
+
+      setTopPlayers(topData);
+      setRecentMatches(recentData);
+      setAllMatchesForStreaks(allMatches);
+      setCounts({ players: pCount.count ?? 0, matches: mCount.count ?? 0, tournaments: tCount.count ?? 0 });
+      setUpcoming(upRes.data as TournamentRow | null);
+      setActive(actRes.data as TournamentRow | null);
+      setNews(newsData);
+
+      let activeArr: MatchRow[] = [];
+      if (actRes.data?.id) {
+        activeArr = await fetchActiveMatches(actRes.data.id);
+      } else {
+        setActiveMatches([]);
+      }
+
+      // Buscar jugadores fuera del top mencionados en cualquier partido visible
+      const knownIds = new Set(topData.map(p => p.id));
+      await fetchMissingPlayers(knownIds, [recentData, activeArr]);
+    } catch (err: any) {
+      console.error("Error cargando homepage:", err);
+      setError("No se pudieron cargar los datos. Intentá recargar la página.");
+      // Salir del estado de loading
+      setTopPlayers(prev => prev ?? []);
+      setRecentMatches(prev => prev ?? []);
+      setNews(prev => prev ?? []);
+    }
+  }, [fetchActiveMatches, fetchMissingPlayers]);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   // My rank
   useEffect(() => {
@@ -162,15 +279,27 @@ const Index = () => {
       .then(({ count }) => setMyRank((count ?? 0) + 1));
   }, [player]);
 
-  // Realtime
+  // Realtime — fetches selectivos
   useEffect(() => {
     const ch = supabase
       .channel("home-live")
-      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, () => fetchAll())
-      .on("postgres_changes", { event: "*", schema: "public", table: "players" }, () => fetchAll())
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, async () => {
+        const recent = await fetchRecentMatches();
+        if (active?.id) {
+          const act = await fetchActiveMatches(active.id);
+          const known = new Set([...(topPlayers ?? []), ...extraPlayers].map(p => p.id));
+          await fetchMissingPlayers(known, [recent, act]);
+        } else {
+          const known = new Set([...(topPlayers ?? []), ...extraPlayers].map(p => p.id));
+          await fetchMissingPlayers(known, [recent]);
+        }
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "players" }, () => {
+        fetchTopPlayers();
+      })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, []);
+  }, [active?.id, fetchRecentMatches, fetchActiveMatches, fetchTopPlayers, fetchMissingPlayers, topPlayers, extraPlayers]);
 
   const countdown = useCountdown(upcoming?.starts_at ?? undefined);
   const playersCount = useCountUp(counts.players);
@@ -186,13 +315,55 @@ const Index = () => {
       .slice(0, 5);
   }, [topPlayers, allMatchesForStreaks]);
 
+  // Match del día: el más reñido de hoy
+  const matchOfDay = useMemo<MatchRow | null>(() => {
+    if (!recentMatches || recentMatches.length === 0) return null;
+    const today = new Date().toDateString();
+    const todays = recentMatches.filter(m =>
+      new Date(m.created_at).toDateString() === today &&
+      m.player1_score !== null && m.player2_score !== null
+    );
+    if (todays.length === 0) return null;
+    return todays.reduce((best, m) => {
+      const diff = Math.abs((m.player1_score ?? 0) - (m.player2_score ?? 0));
+      const bestDiff = Math.abs((best.player1_score ?? 0) - (best.player2_score ?? 0));
+      return diff < bestDiff ? m : best;
+    });
+  }, [recentMatches]);
+
   const featuredNews = news[0];
   const otherNews = news.slice(1, 4);
 
   const loading = topPlayers === null;
 
+  // Progreso del torneo activo
+  const activeProgress = useMemo(() => {
+    if (!active || activeMatches.length === 0) return null;
+    const total = activeMatches.length;
+    const completed = activeMatches.filter(m => m.winner_id !== null).length;
+    return { completed, total, pct: Math.round((completed / total) * 100) };
+  }, [active, activeMatches]);
+
+  // Delays para el podio (1° entra último)
+  const podiumDelays = ["0ms", "200ms", "100ms"];
+
   return (
     <Layout>
+      {/* Banner de error */}
+      {error && (
+        <div className="bg-destructive/10 border-b border-destructive/30">
+          <div className="container py-2.5 text-sm flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-2 text-destructive">
+              <AlertTriangle className="size-4 shrink-0" />
+              {error}
+            </span>
+            <button onClick={() => fetchAll()} className="font-semibold text-destructive hover:underline shrink-0">
+              Reintentar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sticky upcoming tournament banner */}
       {upcoming && (
         <Link to="/torneos" className="block bg-primary/10 border-b border-primary/20 animate-slide-down">
@@ -268,8 +439,8 @@ const Index = () => {
             ))}
           </div>
 
-          {/* Personalized + countdown + weather */}
-          <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-3 gap-3 max-w-3xl">
+          {/* Personalized + countdown + weather + active */}
+          <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl">
             {player && myRank !== null && (
               <div className="rounded-2xl bg-primary-foreground/10 border border-primary-foreground/15 backdrop-blur px-4 py-3 animate-fade-in" style={{ animationDelay: "300ms" }}>
                 <div className="flex items-center gap-3">
@@ -278,6 +449,9 @@ const Index = () => {
                     <div className="text-xs text-primary-foreground/70">Hola, {player.full_name.split(" ")[0]}</div>
                     <div className="font-heading font-semibold truncate">
                       Sos #{myRank} · <span className="text-accent">{player.rating}</span>
+                    </div>
+                    <div className="text-[11px] text-primary-foreground/70 tabular-nums">
+                      {player.wins}V · {player.losses}D
                     </div>
                   </div>
                 </div>
@@ -303,6 +477,21 @@ const Index = () => {
                 </div>
                 <div className="text-xs text-primary-foreground/70">{weatherLabel(weather.weathercode)}</div>
               </div>
+            )}
+            {active && (
+              <Link
+                to={`/torneo/${active.id}`}
+                className="rounded-2xl bg-success/15 border border-success/30 backdrop-blur px-4 py-3 animate-fade-in hover:bg-success/25 transition"
+                style={{ animationDelay: "540ms" }}
+              >
+                <div className="flex items-center gap-2 text-xs text-primary-foreground/70 uppercase tracking-wider">
+                  <Activity className="size-3.5 text-success animate-pulse" /> En curso
+                </div>
+                <div className="font-heading font-bold text-base mt-0.5 truncate">{active.name}</div>
+                <div className="text-[11px] text-primary-foreground/70 tabular-nums">
+                  {activeMatches.filter(m => m.winner_id).length} de {activeMatches.length} jugados
+                </div>
+              </Link>
             )}
           </div>
         </div>
@@ -341,7 +530,13 @@ const Index = () => {
           ) : (
             <div className="grid grid-cols-3 gap-3 md:gap-5 items-end">
               {[top3[1], top3[0], top3[2]].map((p, displayIdx) => (
-                <PodiumCard key={p.id} player={p} displayIdx={displayIdx} />
+                <PodiumCard
+                  key={p.id}
+                  player={p}
+                  displayIdx={displayIdx}
+                  matchesForSpark={allMatchesForStreaks}
+                  delay={podiumDelays[displayIdx]}
+                />
               ))}
             </div>
           )}
@@ -368,6 +563,9 @@ const Index = () => {
                       <span className="text-muted-foreground">venció a</span>
                       <span>{l?.full_name ?? "—"}</span>
                       <span className="text-xs px-1.5 py-0.5 rounded bg-muted tabular-nums">{m.player1_score}-{m.player2_score}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        · {formatDistanceToNow(new Date(m.created_at), { locale: es, addSuffix: true })}
+                      </span>
                     </span>
                   );
                 })}
@@ -376,6 +574,32 @@ const Index = () => {
           </div>
         </section>
       )}
+
+      {/* MATCH OF THE DAY */}
+      {matchOfDay && (() => {
+        const p1 = matchOfDay.player1_id ? playersById[matchOfDay.player1_id] : null;
+        const p2 = matchOfDay.player2_id ? playersById[matchOfDay.player2_id] : null;
+        return (
+          <section className="container pt-10">
+            <div className="relative glass-card overflow-hidden p-5 md:p-7 border-accent/40 animate-fade-in">
+              <div className="absolute -top-10 -right-10 size-40 rounded-full bg-accent/15 blur-2xl pointer-events-none" />
+              <div className="flex items-center gap-2 mb-4">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent text-accent-foreground text-xs font-heading font-bold uppercase tracking-wider shadow-soft">
+                  <Zap className="size-3.5" /> Partido del día
+                </span>
+                <span className="text-xs text-muted-foreground">El más reñido de hoy</span>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <PlayerSide player={p1} winner={matchOfDay.winner_id === p1?.id} />
+                <div className="font-heading font-bold text-3xl md:text-4xl tabular-nums">
+                  {matchOfDay.player1_score} <span className="text-muted-foreground">–</span> {matchOfDay.player2_score}
+                </div>
+                <PlayerSide player={p2} winner={matchOfDay.winner_id === p2?.id} reverse />
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* RECENT MATCHES + STREAKS */}
       <section className="container py-12 grid lg:grid-cols-3 gap-6">
@@ -452,6 +676,25 @@ const Index = () => {
               Ver completo <ChevronRight className="size-4" />
             </Link>
           </div>
+
+          {/* Progreso */}
+          {activeProgress && (
+            <div className="glass-card p-4 mb-4 flex items-center gap-4">
+              <div className="text-sm font-medium shrink-0 hidden sm:block">
+                {activeProgress.completed} de {activeProgress.total} partidos
+              </div>
+              <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
+                  style={{ width: `${activeProgress.pct}%` }}
+                />
+              </div>
+              <div className="font-heading font-bold tabular-nums text-primary shrink-0">
+                {activeProgress.pct}%
+              </div>
+            </div>
+          )}
+
           <div className="glass-card p-6 pt-10 overflow-x-auto">
             <BracketWithLines matches={activeMatches as any} playersById={playersById as any} />
           </div>
