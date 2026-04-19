@@ -51,9 +51,18 @@ export default {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
-        gold: "hsl(var(--gold))",
-        silver: "hsl(var(--silver))",
-        bronze: "hsl(var(--bronze))",
+        gold: {
+          DEFAULT: "hsl(var(--gold))",
+          foreground: "hsl(222 35% 12%)",
+        },
+        silver: {
+          DEFAULT: "hsl(var(--silver))",
+          foreground: "hsl(222 35% 12%)",
+        },
+        bronze: {
+          DEFAULT: "hsl(var(--bronze))",
+          foreground: "hsl(0 0% 100%)",
+        },
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
