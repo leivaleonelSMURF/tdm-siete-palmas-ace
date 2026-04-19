@@ -2,11 +2,14 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { ArrowLeft, Trophy, Swords, Crown } from "lucide-react";
+import { ArrowLeft, Trophy, Swords, Crown, Camera } from "lucide-react";
+import { toast } from "sonner";
 import { Layout } from "@/components/Layout";
 import { Avatar } from "@/components/Avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ImagePicker } from "@/components/ImagePicker";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
 type P = {
@@ -21,11 +24,13 @@ type M = {
 
 const PlayerProfile = () => {
   const { id = "" } = useParams();
+  const { player: me, refreshPlayer } = useAuth();
   const [p, setP] = useState<P | null>(null);
   const [rank, setRank] = useState<number>(0);
   const [matches, setMatches] = useState<M[]>([]);
   const [opponents, setOpponents] = useState<Record<string, { id: string; full_name: string; avatar_url: string | null }>>({});
   const [loading, setLoading] = useState(true);
+  const [editingAvatar, setEditingAvatar] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -92,6 +97,20 @@ const PlayerProfile = () => {
   const total = p.wins + p.losses;
   const winPct = total ? Math.round((p.wins / total) * 100) : 0;
 
+  const isOwner = !!me && me.id === p.id;
+
+  const saveAvatar = async (url: string | null) => {
+    const { error } = await supabase.from("players").update({ avatar_url: url }).eq("id", p.id);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setP({ ...p, avatar_url: url });
+    setEditingAvatar(false);
+    toast.success("Foto actualizada");
+    refreshPlayer();
+  };
+
   return (
     <Layout>
       <section className="container py-8 md:py-12">
@@ -100,8 +119,33 @@ const PlayerProfile = () => {
         </Link>
 
         <div className="glass-card p-6 md:p-8 flex flex-col md:flex-row md:items-center gap-6">
-          <Avatar name={p.full_name} url={p.avatar_url} size={96} ring />
+          <div className="relative shrink-0">
+            <Avatar name={p.full_name} url={p.avatar_url} size={96} ring />
+            {isOwner && !editingAvatar && (
+              <button
+                onClick={() => setEditingAvatar(true)}
+                className="absolute -bottom-1 -right-1 size-9 rounded-full bg-primary text-primary-foreground grid place-items-center shadow-lift hover:bg-primary/90 transition"
+                aria-label="Cambiar foto"
+                title="Cambiar foto de perfil"
+              >
+                <Camera className="size-4" />
+              </button>
+            )}
+          </div>
           <div className="flex-1 min-w-0">
+            {isOwner && editingAvatar && (
+              <div className="mb-4 glass-card p-4">
+                <div className="font-heading font-semibold mb-2 text-sm">Cambiar foto de perfil</div>
+                <ImagePicker
+                  value={p.avatar_url}
+                  onChange={saveAvatar}
+                  folder={`players/${p.id}`}
+                  previewSize={88}
+                  shape="circle"
+                />
+                <button onClick={() => setEditingAvatar(false)} className="mt-3 text-xs text-muted-foreground hover:text-foreground">Cancelar</button>
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="font-heading font-bold text-3xl md:text-4xl">{p.full_name}</h1>
               {rank > 0 && rank <= 3 && <Crown className={cn("size-6", rank === 1 ? "text-warning" : rank === 2 ? "text-muted-foreground" : "text-bronze")} />}
