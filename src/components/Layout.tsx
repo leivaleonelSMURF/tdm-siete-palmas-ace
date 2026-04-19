@@ -1,12 +1,12 @@
 import { Navbar, BottomNav } from "./Navbar";
 import { ReactNode, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { ThemeProvider } from "next-themes";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  // Mostrar un spinner "7P" solo durante el primer render (menos de 1 segundo)
   if (!mounted) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center bg-background">
@@ -17,18 +17,19 @@ export function Layout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col bg-background">
-      <Navbar />
-      <main className="flex-1 pb-24 md:pb-12">{children}</main>
-      <BottomNav />
-      <footer className="hidden md:block container py-6 text-xs text-muted-foreground border-t border-border/50">
-        © {new Date().getFullYear()} TDM Siete Palmas · Tenis de mesa recreativo
-      </footer>
-    </div>
+    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+      <div className="min-h-dvh flex flex-col bg-background">
+        <Navbar />
+        <main className="flex-1 pb-24 md:pb-12">{children}</main>
+        <BottomNav />
+        <footer className="hidden md:block container py-6 text-xs text-muted-foreground border-t border-border/50">
+          © {new Date().getFullYear()} TDM Siete Palmas · Tenis de mesa recreativo
+        </footer>
+      </div>
+    </ThemeProvider>
   );
 }
 
-// Componente de spinner con "7P" girando
 function Spinner7P({ className }: { className?: string }) {
   return (
     <svg

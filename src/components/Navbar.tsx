@@ -1,13 +1,15 @@
 import { NavLink, Link } from "react-router-dom";
-import { Home, Trophy, BarChart3, Newspaper, Swords, User, LogIn, LogOut, Shield } from "lucide-react";
+import { Home, Trophy, BarChart3, Newspaper, Swords, User, LogIn, LogOut, Shield, Sun, Moon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar } from "./Avatar";
 import { NotificationsBell } from "./NotificationsBell";
+import { useTheme } from "next-themes";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import ASCIIText from "./ASCIIText";
 
 const links = [
   { to: "/", label: "Inicio", icon: Home },
@@ -19,16 +21,22 @@ const links = [
 
 export function Navbar() {
   const { user, player, signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
 
   return (
     <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/75 border-b border-border/60">
       <nav className="container flex items-center justify-between h-16">
         <Link to="/" className="flex items-center gap-2 font-heading font-bold text-lg">
-          <span className="grid place-items-center size-9 rounded-xl hero-gradient text-primary-foreground shadow-soft">
-            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <circle cx="9" cy="11" r="6" /><path d="m13 15 6 6" /><circle cx="19" cy="6" r="2" />
-            </svg>
-          </span>
+          <div className="w-32 h-10 relative">
+            <ASCIIText 
+              text="7P" 
+              asciiFontSize={6} 
+              textFontSize={60} 
+              planeBaseHeight={4} 
+              enableWaves={true}
+              textColor={theme === 'dark' ? '#fdf9f3' : '#1a1a1a'}
+            />
+          </div>
           <span className="hidden sm:inline">TDM <span className="text-accent">Siete Palmas</span></span>
         </Link>
 
@@ -51,6 +59,15 @@ export function Navbar() {
         </ul>
 
         <div className="flex items-center gap-2">
+          {/* Botón modo oscuro/claro */}
+          <button
+            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+            className="tap-target grid place-items-center size-9 rounded-xl hover:bg-muted transition-colors"
+            aria-label="Cambiar tema"
+          >
+            {theme === 'dark' ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
+
           {user && player && <NotificationsBell />}
           {user && player ? (
             <DropdownMenu>
@@ -70,7 +87,6 @@ export function Navbar() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                {/* Acceso discreto al login admin para cualquier visitante */}
                 <DropdownMenuItem onClick={signOut} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="size-4" /> Cerrar sesión
                 </DropdownMenuItem>
