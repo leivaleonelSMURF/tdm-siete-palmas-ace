@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -138,8 +138,15 @@ const Index = () => {
   const [active, setActive] = useState<TournamentRow | null>(null);
   const [activeMatches, setActiveMatches] = useState<MatchRow[]>([]);
   const [news, setNews] = useState<NewsRow[]>([]);
+  const [loadingNews, setLoadingNews] = useState(true);
   const [myRank, setMyRank] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Refs para que el canal de Realtime no se re-suscriba en cada cambio de estado
+  const topPlayersRef = useRef<PlayerRow[]>([]);
+  const extraPlayersRef = useRef<PlayerRow[]>([]);
+  useEffect(() => { topPlayersRef.current = topPlayers ?? []; }, [topPlayers]);
+  useEffect(() => { extraPlayersRef.current = extraPlayers; }, [extraPlayers]);
 
   // Mapa completo: top + extras (jugadores que aparecen en partidos pero no están en el top)
   const playersById = useMemo(() => {
@@ -207,6 +214,7 @@ const Index = () => {
 
   const fetchAll = useCallback(async () => {
     setError(null);
+    setLoadingNews(true);
     try {
       // News con fallback: intento con published; si la columna no existe (PGRST), reintento sin filtro
       let newsData: NewsRow[] = [];
@@ -249,6 +257,7 @@ const Index = () => {
       setUpcoming(upRes.data as TournamentRow | null);
       setActive(actRes.data as TournamentRow | null);
       setNews(newsData);
+      setLoadingNews(false);
 
       let activeArr: MatchRow[] = [];
       if (actRes.data?.id) {
@@ -267,6 +276,7 @@ const Index = () => {
       setTopPlayers(prev => prev ?? []);
       setRecentMatches(prev => prev ?? []);
       setNews(prev => prev ?? []);
+      setLoadingNews(false);
     }
   }, [fetchActiveMatches, fetchMissingPlayers]);
 
@@ -285,12 +295,11 @@ const Index = () => {
       .channel("home-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, async () => {
         const recent = await fetchRecentMatches();
+        const known = new Set([...topPlayersRef.current, ...extraPlayersRef.current].map(p => p.id));
         if (active?.id) {
           const act = await fetchActiveMatches(active.id);
-          const known = new Set([...(topPlayers ?? []), ...extraPlayers].map(p => p.id));
           await fetchMissingPlayers(known, [recent, act]);
         } else {
-          const known = new Set([...(topPlayers ?? []), ...extraPlayers].map(p => p.id));
           await fetchMissingPlayers(known, [recent]);
         }
       })
@@ -299,7 +308,7 @@ const Index = () => {
       })
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [active?.id, fetchRecentMatches, fetchActiveMatches, fetchTopPlayers, fetchMissingPlayers, topPlayers, extraPlayers]);
+  }, [active?.id, fetchRecentMatches, fetchActiveMatches, fetchTopPlayers, fetchMissingPlayers]);
 
   const countdown = useCountdown(upcoming?.starts_at ?? undefined);
   const playersCount = useCountUp(counts.players);
@@ -451,7 +460,7 @@ const Index = () => {
                       Sos #{myRank} · <span className="text-accent">{player.rating}</span>
                     </div>
                     <div className="text-[11px] text-primary-foreground/70 tabular-nums">
-                      {player.wins}V · {player.losses}D
+                      {(player.wins ?? 0)}V · {(player.losses ?? 0)}D
                     </div>
                   </div>
                 </div>
@@ -709,7 +718,13 @@ const Index = () => {
             Todas <ChevronRight className="size-4" />
           </Link>
         </div>
-        {news.length === 0 ? (
+        {loadingNews ? (
+          <div className="grid md:grid-cols-3 gap-4">
+            <Skeleton className="md:col-span-2 md:row-span-2 h-72 rounded-2xl" />
+            <Skeleton className="h-44 rounded-2xl" />
+            <Skeleton className="h-44 rounded-2xl" />
+          </div>
+        ) : news.length === 0 ? (
           <EmptyState icon={BarChart3} title="Sin noticias todavía" hint="El equipo del club publicará novedades acá." />
         ) : (
           <div className="grid md:grid-cols-3 gap-4">
