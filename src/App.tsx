@@ -15,6 +15,7 @@ import NewsDetail from "./pages/NewsDetail";
 import Challenges from "./pages/Challenges";
 import Rules from "./pages/Rules";
 import Admin from "./pages/Admin";
+import AdminAuth from "./pages/AdminAuth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -38,7 +39,8 @@ const App = () => (
             <Route path="/noticia/:id" element={<NewsDetail />} />
             <Route path="/desafios" element={<Challenges />} />
             <Route path="/reglas" element={<Rules />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route path="/admin" element={<AdminAuth />} />
+            <Route path="/admin/panel" element={<Admin />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
