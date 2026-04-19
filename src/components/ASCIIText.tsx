@@ -11,15 +11,15 @@ uniform float uEnableWaves;
 
 void main() {
     vUv = uv;
-    float time = uTime * 5.;
+    float time = uTime * 2.;
 
     float waveFactor = uEnableWaves;
 
     vec3 transformed = position;
 
-    transformed.x += sin(time + position.y) * 0.3 * waveFactor;
-    transformed.y += cos(time + position.z) * 0.1 * waveFactor;
-    transformed.z += sin(time + position.x) * 0.2 * waveFactor;
+    transformed.x += sin(time + position.y) * 0.15 * waveFactor;
+    transformed.y += cos(time + position.z) * 0.05 * waveFactor;
+    transformed.z += sin(time + position.x) * 0.1 * waveFactor;
 
     gl_Position = projectionMatrix * modelViewMatrix * vec4(transformed, 1.0);
 }
@@ -32,15 +32,9 @@ uniform float uTime;
 uniform sampler2D uTexture;
 
 void main() {
-    float time = uTime;
     vec2 pos = vUv;
-    
-    float move = sin(time + mouse) * 0.01;
-    float r = texture2D(uTexture, pos + cos(time * 2. - time + pos.x) * .01).r;
-    float g = texture2D(uTexture, pos + tan(time * .5 + pos.x - time) * .01).g;
-    float b = texture2D(uTexture, pos - cos(time * 2. + time + pos.y) * .01).b;
-    float a = texture2D(uTexture, pos).a;
-    gl_FragColor = vec4(r, g, b, a);
+    vec4 texColor = texture2D(uTexture, pos);
+    gl_FragColor = texColor;
 }
 `;
 
@@ -94,7 +88,7 @@ class AsciiFilter {
     this.invert = invert ?? true;
     this.fontSize = fontSize ?? 12;
     this.fontFamily = fontFamily ?? "'Courier New', monospace";
-    this.charset = charset ?? ' .:-=+*#%@';
+    this.charset = charset ?? '@%#*+=-:. ';
 
     if (this.context) {
       (this.context as any).webkitImageSmoothingEnabled = false;
@@ -186,8 +180,8 @@ class AsciiFilter {
           }
 
           let gray = (0.3 * r + 0.6 * g + 0.1 * b) / 255;
-          let idx = Math.floor((1 - gray) * (this.charset.length - 1));
-          if (!this.invert) idx = this.charset.length - idx - 1;
+          let idx = Math.floor(gray * (this.charset.length - 1));
+          if (this.invert) idx = this.charset.length - idx - 1;
           str += this.charset[idx];
         }
         str += '\n';
@@ -358,8 +352,8 @@ class CanvAscii {
 
     this.filter = new AsciiFilter(this.renderer, {
       fontFamily: 'IBM Plex Mono',
-      fontSize: 10,
-      invert: false
+      fontSize: 12,
+      invert: true
     });
 
     this.container.appendChild(this.filter.domElement);
@@ -588,9 +582,12 @@ export default function ASCIIText({
           top: 0;
           z-index: 9;
           background-attachment: fixed;
-          color: #ff6188;
-          mix-blend-mode: screen;
-          font-weight: 500;
+          background: linear-gradient(135deg, #ff6188 0%, #fc9867 50%, #ffd866 100%);
+          -webkit-text-fill-color: transparent;
+          -webkit-background-clip: text;
+          background-clip: text;
+          mix-blend-mode: multiply;
+          font-weight: 600;
         }
       `}</style>
     </div>
