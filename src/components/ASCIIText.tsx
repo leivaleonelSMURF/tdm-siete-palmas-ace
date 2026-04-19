@@ -44,14 +44,37 @@ void main() {
 }
 `;
 
-Math.map = function (n, start, stop, start2, stop2) {
+declare global {
+  interface Math {
+    map(n: number, start: number, stop: number, start2: number, stop2: number): number;
+  }
+}
+
+Math.map = function (n: number, start: number, stop: number, start2: number, stop2: number) {
   return ((n - start) / (stop - start)) * (stop2 - start2) + start2;
 };
 
 const PX_RATIO = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
 
 class AsciiFilter {
-  constructor(renderer, { fontSize, fontFamily, charset, invert } = {}) {
+  renderer: THREE.WebGLRenderer;
+  domElement: HTMLDivElement;
+  pre: HTMLPreElement;
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+  deg: number = 0;
+  invert: boolean;
+  fontSize: number;
+  fontFamily: string;
+  charset: string;
+  width: number = 0;
+  height: number = 0;
+  cols: number = 0;
+  rows: number = 0;
+  center: { x: number; y: number } = { x: 0, y: 0 };
+  mouse: { x: number; y: number } = { x: 0, y: 0 };
+
+  constructor(renderer: THREE.WebGLRenderer, { fontSize, fontFamily, charset, invert }: { fontSize?: number; fontFamily?: string; charset?: string; invert?: boolean } = {}) {
     this.renderer = renderer;
     this.domElement = document.createElement('div');
     this.domElement.style.position = 'absolute';
@@ -64,7 +87,7 @@ class AsciiFilter {
     this.domElement.appendChild(this.pre);
 
     this.canvas = document.createElement('canvas');
-    this.context = this.canvas.getContext('2d');
+    this.context = this.canvas.getContext('2d') as CanvasRenderingContext2D;
     this.domElement.appendChild(this.canvas);
 
     this.deg = 0;
@@ -73,10 +96,12 @@ class AsciiFilter {
     this.fontFamily = fontFamily ?? "'Courier New', monospace";
     this.charset = charset ?? ' .\'`^",:;Il!i~+_-?][}{1)(|/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$';
 
-    this.context.webkitImageSmoothingEnabled = false;
-    this.context.mozImageSmoothingEnabled = false;
-    this.context.msImageSmoothingEnabled = false;
-    this.context.imageSmoothingEnabled = false;
+    if (this.context) {
+      (this.context as any).webkitImageSmoothingEnabled = false;
+      (this.context as any).mozImageSmoothingEnabled = false;
+      (this.context as any).msImageSmoothingEnabled = false;
+      this.context.imageSmoothingEnabled = false;
+    }
 
     this.onMouseMove = this.onMouseMove.bind(this);
     document.addEventListener('mousemove', this.onMouseMove);
@@ -177,9 +202,17 @@ class AsciiFilter {
 }
 
 class CanvasTxt {
-  constructor(txt, { fontSize = 200, fontFamily = 'Arial', color = '#fdf9f3' } = {}) {
+  canvas: HTMLCanvasElement;
+  context: CanvasRenderingContext2D;
+  txt: string;
+  fontSize: number;
+  fontFamily: string;
+  color: string;
+  font: string;
+
+  constructor(txt: string, { fontSize = 200, fontFamily = 'Arial', color = '#fdf9f3' }: { fontSize?: number; fontFamily?: string; color?: string } = {}) {
     this.canvas = document.createElement('canvas');
-    this.context = this.canvas.getContext('2d');
+    this.context = this.canvas.getContext('2d') as CanvasRenderingContext2D;
     this.txt = txt;
     this.fontSize = fontSize;
     this.fontFamily = fontFamily;
@@ -224,21 +257,43 @@ class CanvasTxt {
 }
 
 class CanvAscii {
+  textString: string;
+  asciiFontSize: number;
+  textFontSize: number;
+  textColor: string;
+  planeBaseHeight: number;
+  container: HTMLElement;
+  width: number;
+  height: number;
+  enableWaves: boolean;
+  camera: THREE.PerspectiveCamera;
+  scene: THREE.Scene;
+  mouse: { x: number; y: number } = { x: 0, y: 0 };
+  textCanvas!: CanvasTxt;
+  texture!: THREE.CanvasTexture;
+  geometry!: THREE.PlaneGeometry;
+  material!: THREE.ShaderMaterial;
+  mesh!: THREE.Mesh;
+  renderer!: THREE.WebGLRenderer;
+  filter!: AsciiFilter;
+  center: { x: number; y: number } = { x: 0, y: 0 };
+  animationFrameId = 0;
+
   constructor(
-    { text, asciiFontSize, textFontSize, textColor, planeBaseHeight, enableWaves },
-    containerElem,
-    width,
-    height
+    { text, asciiFontSize, textFontSize, textColor, planeBaseHeight, enableWaves }: { text?: string; asciiFontSize?: number; textFontSize?: number; textColor?: string; planeBaseHeight?: number; enableWaves?: boolean },
+    containerElem: HTMLElement,
+    width: number,
+    height: number
   ) {
-    this.textString = text;
-    this.asciiFontSize = asciiFontSize;
-    this.textFontSize = textFontSize;
-    this.textColor = textColor;
-    this.planeBaseHeight = planeBaseHeight;
+    this.textString = text ?? '';
+    this.asciiFontSize = asciiFontSize ?? 8;
+    this.textFontSize = textFontSize ?? 200;
+    this.textColor = textColor ?? '#fdf9f3';
+    this.planeBaseHeight = planeBaseHeight ?? 8;
     this.container = containerElem;
     this.width = width;
     this.height = height;
-    this.enableWaves = enableWaves;
+    this.enableWaves = !!enableWaves;
 
     this.camera = new THREE.PerspectiveCamera(45, this.width / this.height, 1, 1000);
     this.camera.position.z = 30;
@@ -409,6 +464,13 @@ export default function ASCIIText({
   textColor = '#fdf9f3',
   planeBaseHeight = 8,
   enableWaves = true
+}: {
+  text?: string;
+  asciiFontSize?: number;
+  textFontSize?: number;
+  textColor?: string;
+  planeBaseHeight?: number;
+  enableWaves?: boolean;
 }) {
   const containerRef = useRef(null);
   const asciiRef = useRef(null);
