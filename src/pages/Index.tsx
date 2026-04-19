@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCountUp } from "@/hooks/useCountUp";
 import { useCountdown } from "@/hooks/useCountdown";
 import { cn } from "@/lib/utils";
+import AnimatedList from "@/components/AnimatedList";
 
 type PlayerRow = {
   id: string; full_name: string; rating: number;
