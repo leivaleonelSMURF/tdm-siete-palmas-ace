@@ -1,12 +1,13 @@
 import { Navbar, BottomNav } from "./Navbar";
-import { ReactNode } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { ReactNode, useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export function Layout({ children }: { children: ReactNode }) {
-  const { loading } = useAuth();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
 
-  if (loading) {
+  // Mostrar un spinner "7P" solo durante el primer render (menos de 1 segundo)
+  if (!mounted) {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center bg-background">
         <Spinner7P className="size-16" />
