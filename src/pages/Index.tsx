@@ -6,7 +6,7 @@ import {
   ChevronRight, Crown, Flame, Trophy, Calendar, ArrowRight,
   Swords, BarChart3, Users, ArrowUpRight, Bell,
   Sun, Cloud, CloudRain, CloudSnow, CloudFog, Zap, LogIn,
-  AlertTriangle, Activity, Image as ImageIcon, Instagram, Mail, MapPin,
+  AlertTriangle, Activity, Image as ImageIcon, Info,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -145,7 +145,6 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
   const [matchOfDay, setMatchOfDay] = useState<MatchRow | null>(null);
 
-  // Refs para realtime
   const topPlayersRef = useRef<PlayerRow[]>([]);
   const extraPlayersRef = useRef<PlayerRow[]>([]);
   useEffect(() => { topPlayersRef.current = topPlayers ?? []; }, [topPlayers]);
@@ -317,7 +316,6 @@ const Index = () => {
 
   useEffect(() => {
     fetchAll();
-    // Establecer título de la página (alternativa simple a react-helmet)
     document.title = "Tenis de mesa Siete Palmas – Club oficial | Ranking, torneos y partidos";
   }, [fetchAll]);
 
@@ -377,22 +375,20 @@ const Index = () => {
 
   return (
     <Layout>
-      {/* Banner de error */}
-      {error && (
-        <div className="bg-destructive/10 border-b border-destructive/30">
-          <div className="container py-2.5 text-sm flex items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-2 text-destructive">
-              <AlertTriangle className="size-4 shrink-0" />
-              {error}
-            </span>
+      <div className="bg-destructive/10 border-b border-destructive/30">
+        <div className="container py-2.5 text-sm flex items-center justify-between gap-3">
+          <span className="inline-flex items-center gap-2 text-destructive">
+            <AlertTriangle className="size-4 shrink-0" />
+            {error || "Sistema de puntos actualizado: rating inicial 600 puntos."}
+          </span>
+          {error && (
             <button onClick={() => fetchAll()} className="font-semibold text-destructive hover:underline shrink-0">
               Reintentar
             </button>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Sticky upcoming tournament banner */}
       {upcoming && (
         <Link to="/torneos" className="block bg-primary/10 border-b border-primary/20 animate-slide-down">
           <div className="container flex items-center justify-between gap-3 h-12 text-sm">
@@ -412,7 +408,6 @@ const Index = () => {
         </Link>
       )}
 
-      {/* HERO */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 hero-gradient" />
         <div className="absolute inset-0 opacity-30 mix-blend-overlay"
@@ -450,9 +445,12 @@ const Index = () => {
               className="tap-target inline-flex items-center gap-2 px-5 rounded-xl bg-primary-foreground/10 border border-primary-foreground/20 text-primary-foreground font-semibold hover:bg-primary-foreground/20 active:opacity-75 transition-colors backdrop-blur">
               <Trophy className="size-4" /> Ver torneos
             </Link>
+            <Link to="/reglas"
+              className="tap-target inline-flex items-center gap-2 px-5 rounded-xl bg-primary-foreground/10 border border-primary-foreground/20 text-primary-foreground font-semibold hover:bg-primary-foreground/20 active:opacity-75 transition-colors backdrop-blur">
+              <Info className="size-4" /> Reglas
+            </Link>
           </div>
 
-          {/* Counters */}
           <div className="mt-10 grid grid-cols-3 gap-3 max-w-xl">
             {[
               { v: playersCount, l: "Jugadores", i: Users },
@@ -467,7 +465,6 @@ const Index = () => {
             ))}
           </div>
 
-          {/* Personalized + countdown + weather + active */}
           <div className="mt-6 grid sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl">
             {player && myRank !== null && (
               <div className="rounded-2xl bg-primary-foreground/10 border border-primary-foreground/15 backdrop-blur px-4 py-3 animate-fade-in" style={{ animationDelay: "300ms" }}>
@@ -525,7 +522,6 @@ const Index = () => {
         </div>
       </section>
 
-      {/* PODIUM */}
       <section className="container -mt-8 md:-mt-12 relative z-10">
         <div className="glass-card p-5 md:p-7">
           <div className="flex items-center justify-between mb-5">
@@ -571,7 +567,6 @@ const Index = () => {
         </div>
       </section>
 
-      {/* ACTIVITY TICKER */}
       {recentMatches && recentMatches.length > 0 && (
         <section className="mt-10 overflow-hidden border-y border-border/60 bg-card/50">
           <div className="flex items-center gap-3 py-3 group">
@@ -603,7 +598,6 @@ const Index = () => {
         </section>
       )}
 
-      {/* MATCH OF THE DAY */}
       {matchOfDay && (() => {
         const p1 = matchOfDay.player1_id ? playersById[matchOfDay.player1_id] : null;
         const p2 = matchOfDay.player2_id ? playersById[matchOfDay.player2_id] : null;
@@ -629,7 +623,6 @@ const Index = () => {
         );
       })()}
 
-      {/* RECENT MATCHES + STREAKS */}
       <section className="container py-12 grid lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <h2 className="font-heading font-bold text-2xl mb-4 flex items-center gap-2">
@@ -693,7 +686,6 @@ const Index = () => {
         </div>
       </section>
 
-      {/* MINI BRACKET */}
       {active && activeMatches.length > 0 && (
         <section className="container pb-12">
           <div className="flex items-center justify-between mb-6">
@@ -728,7 +720,6 @@ const Index = () => {
         </section>
       )}
 
-      {/* NEWS con placeholders de imagen */}
       <section className="container pb-16">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-heading font-bold text-2xl">Noticias del club</h2>
@@ -789,41 +780,32 @@ const Index = () => {
         )}
       </section>
 
-      {/* SECCIÓN: CÓMO LLEGAR + REDES SOCIALES */}
+      {/* NUEVA SECCIÓN: SOBRE EL TENIS DE MESA */}
       <section className="container pb-20">
-        <div className="glass-card p-5 md:p-7 grid md:grid-cols-2 gap-8">
-          <div>
-            <h2 className="font-heading font-bold text-2xl flex items-center gap-2 mb-4">
-              <MapPin className="text-primary" /> Cómo llegar
-            </h2>
-            <p className="text-muted-foreground mb-2">📍 Club Siete Palmas</p>
-            <p className="font-medium">Calle Falsa 123, Las Palmas de Gran Canaria</p>
-            <p className="text-sm text-muted-foreground mt-4">Horario: Lunes a viernes de 17 a 22 h</p>
-            <div className="mt-4 flex gap-4">
-              <a href="https://instagram.com/tuclub" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
-                <Instagram className="size-6" />
-              </a>
-              <a href="https://wa.me/34612345678" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
-                <svg className="size-6" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-5.46-4.45-9.91-9.91-9.91zm0 18.29c-1.49 0-2.95-.4-4.21-1.15l-.3-.18-3.12.82.83-3.04-.2-.31c-.84-1.29-1.28-2.77-1.28-4.29 0-4.46 3.63-8.09 8.09-8.09s8.09 3.63 8.09 8.09-3.63 8.09-8.09 8.09zm4.44-6.06c-.24-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.54.12-.16.24-.62.79-.76.95-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.38-.4-.52-.41-.14-.01-.29-.01-.44-.01-.16 0-.42.06-.64.31-.22.25-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.69 2.58 4.09 3.62.57.25 1.02.4 1.37.51.58.18 1.1.15 1.51.09.46-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28z"/>
-                </svg>
-              </a>
-              <a href="mailto:club@ejemplo.com" className="text-muted-foreground hover:text-primary transition-colors">
-                <Mail className="size-6" />
-              </a>
+        <div className="glass-card p-6 md:p-8">
+          <h2 className="font-heading font-bold text-2xl flex items-center gap-2 mb-6">
+            <Info className="text-primary" /> Sobre el tenis de mesa
+          </h2>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <div className="font-heading font-semibold text-primary">⚡ Velocidad y reflejos</div>
+              <p className="text-sm text-muted-foreground">La pelota puede alcanzar más de 150 km/h. Los mejores reflejos y anticipación marcan la diferencia.</p>
+            </div>
+            <div className="space-y-2">
+              <div className="font-heading font-semibold text-primary">🔄 Efectos y giros</div>
+              <p className="text-sm text-muted-foreground">Cortado, liftado, con efecto lateral... dominar los giros es clave para descolocar al rival.</p>
+            </div>
+            <div className="space-y-2">
+              <div className="font-heading font-semibold text-primary">🏓 Estrategia de juego</div>
+              <p className="text-sm text-muted-foreground">No solo potencia: colocar la pelota, variar ritmos y leer al oponente son armas tácticas esenciales.</p>
             </div>
           </div>
-          <div className="aspect-video rounded-xl overflow-hidden">
-            <iframe
-              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3197.123456789!2d-15.5!3d28.1!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjnCsDA2JzAwLjAiTiAxNcKwMzAnMDAuMCJX!5e0!3m2!1ses!2ses!4v1234567890"
-              width="100%" height="100%" style={{ border: 0 }} allowFullScreen loading="lazy"
-              title="Mapa del club"
-            ></iframe>
+          <div className="mt-6 text-center text-xs text-muted-foreground">
+            ¿Querés mejorar? Participá en nuestros entrenamientos y torneos. ¡Todos los niveles son bienvenidos!
           </div>
         </div>
       </section>
 
-      {/* FEATURE CTA cards */}
       <section className="container pb-20 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {[
           { to: "/rankings", icon: BarChart3, title: "Ranking completo", desc: "Todos los jugadores ordenados por rating con stats." },
