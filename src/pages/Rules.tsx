@@ -1,22 +1,16 @@
-import { Helmet } from "react-helmet-async";
 import { Layout } from "@/components/Layout";
-import { Trophy, Swords, BarChart3, AlertCircle } from "lucide-react";
+import { Trophy, Swords, BarChart3 } from "lucide-react";
 
 const Reglas = () => {
   return (
     <Layout>
-      <Helmet>
-        <title>Reglas y sistema de puntos | Tenis de mesa Siete Palmas</title>
-        <meta name="description" content="Sistema de puntuación por torneos, rating ELO y reglas del club." />
-      </Helmet>
-
       <div className="container py-12 max-w-4xl">
         <h1 className="font-heading font-bold text-4xl md:text-5xl mb-6">Reglas y sistema de puntos</h1>
         <p className="text-muted-foreground text-lg mb-8">
           Todo lo que necesitás saber sobre cómo se calcula el ranking, los puntajes de torneos y las variaciones por partido.
         </p>
 
-        {/* Sección: Puntos por instancia */}
+        {/* Puntos por instancia */}
         <section className="glass-card p-6 mb-8">
           <h2 className="font-heading font-bold text-2xl flex items-center gap-2 mb-4">
             <Trophy className="text-warning" /> Puntos por instancia alcanzada
@@ -48,7 +42,7 @@ const Reglas = () => {
           </p>
         </section>
 
-        {/* Sección: Sistema de rating ELO */}
+        {/* Sistema de rating ELO */}
         <section className="glass-card p-6 mb-8">
           <h2 className="font-heading font-bold text-2xl flex items-center gap-2 mb-4">
             <BarChart3 className="text-primary" /> Sistema de rating (ELO)
