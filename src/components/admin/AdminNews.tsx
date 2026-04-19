@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Field, Modal, inputCls } from "./AdminTournaments";
+import { ImagePicker } from "@/components/ImagePicker";
 
 type N = {
   id: string; title: string; content: string;
@@ -139,7 +140,9 @@ function NewsForm({ news, onClose, onSaved }: { news: N | null; onClose: () => v
     <Modal title={news ? "Editar noticia" : "Nueva noticia"} onClose={onClose}>
       <div className="space-y-3">
         <Field label="Título"><input value={title} onChange={e => setTitle(e.target.value)} className={inputCls} /></Field>
-        <Field label="Imagen (URL)"><input value={imageUrl} onChange={e => setImageUrl(e.target.value)} placeholder="https://…" className={inputCls} /></Field>
+        <Field label="Imagen de portada">
+          <ImagePicker value={imageUrl} onChange={(u) => setImageUrl(u ?? "")} folder="news" previewSize={120} />
+        </Field>
         <Field label="Contenido"><textarea value={content} onChange={e => setContent(e.target.value)} rows={8} className={inputCls} /></Field>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={published} onChange={e => setPublished(e.target.checked)} className="size-4 accent-primary" />

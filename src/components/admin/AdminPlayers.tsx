@@ -5,6 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar } from "@/components/Avatar";
 import { Field, Modal, inputCls } from "./AdminTournaments";
+import { ImagePicker } from "@/components/ImagePicker";
 
 type P = {
   id: string; full_name: string; rating: number;
@@ -123,7 +124,9 @@ function PlayerForm({ player, onClose, onSaved }: { player: P; onClose: () => vo
     <Modal title={`Editar — ${player.full_name}`} onClose={onClose}>
       <div className="space-y-3">
         <Field label="Nombre completo"><input value={fullName} onChange={e => setFullName(e.target.value)} className={inputCls} /></Field>
-        <Field label="Avatar (URL)"><input value={avatarUrl} onChange={e => setAvatarUrl(e.target.value)} placeholder="https://…" className={inputCls} /></Field>
+        <Field label="Foto de perfil">
+          <ImagePicker value={avatarUrl} onChange={(u) => setAvatarUrl(u ?? "")} folder={`players/${player.id}`} previewSize={88} shape="circle" />
+        </Field>
         <Field label="Bio"><textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} className={inputCls} /></Field>
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Teléfono"><input value={phone} onChange={e => setPhone(e.target.value)} className={inputCls} /></Field>

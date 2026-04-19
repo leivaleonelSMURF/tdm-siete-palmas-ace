@@ -70,6 +70,7 @@ export function Navbar() {
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
+                {/* Acceso discreto al login admin para cualquier visitante */}
                 <DropdownMenuItem onClick={signOut} className="cursor-pointer text-destructive focus:text-destructive">
                   <LogOut className="size-4" /> Cerrar sesión
                 </DropdownMenuItem>
