@@ -1,3 +1,4 @@
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
@@ -6,8 +7,9 @@ import {
   ChevronRight, Crown, Flame, Trophy, Calendar, ArrowRight,
   Swords, BarChart3, Users, ArrowUpRight, Bell,
   Sun, Cloud, CloudRain, CloudSnow, CloudFog, Zap, LogIn,
-  AlertTriangle, Activity,
+  AlertTriangle, Activity, Image as ImageIcon, Instagram, Mail, MapPin,
 } from "lucide-react";
+import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useWeather, weatherLabel } from "@/hooks/useWeather";
@@ -84,13 +86,15 @@ function PodiumCard({
   const platformH = ["h-16", "h-24", "h-10"];
   const topPad = ["pt-8", "pt-2", "pt-14"];
   const spark = useMemo(() => buildSparkValues(player, matchesForSpark), [player, matchesForSpark]);
+  // Mejora de contraste en el podio: añadir sombra al texto
+  const textShadow = "drop-shadow(0 1px 1px rgba(0,0,0,0.3))";
   return (
     <div className={cn("flex flex-col items-center animate-slide-up", topPad[displayIdx])} style={{ animationDelay: delay }}>
       <Link to={`/jugador/${player.id}`} className="w-full glass-card glass-card-hover p-3 md:p-4 text-center">
         <div className="relative inline-block">
           <Avatar name={player.full_name} url={player.avatar_url} size={56} ring />
           {realRank === 1 && (
-            <Crown className="absolute -top-3 left-1/2 -translate-x-1/2 size-5 text-warning fill-warning drop-shadow" />
+            <Crown className="absolute -top-3 left-1/2 -translate-x-1/2 size-5 text-warning fill-warning drop-shadow" aria-label="Primer lugar" />
           )}
         </div>
         <div className="mt-2 font-heading font-semibold text-sm truncate">{player.full_name}</div>
@@ -99,7 +103,7 @@ function PodiumCard({
           <Sparkline values={spark} width={80} height={20} />
         </div>
       </Link>
-      <div className={cn("w-full rounded-t-lg mt-2 grid place-items-center text-primary-foreground font-heading font-bold", platformH[displayIdx], platforms[displayIdx])}>
+      <div className={cn("w-full rounded-t-lg mt-2 grid place-items-center text-primary-foreground font-heading font-bold", platformH[displayIdx], platforms[displayIdx])} style={{ textShadow }}>
         {realRank}°
       </div>
     </div>
@@ -132,15 +136,18 @@ const Index = () => {
   const [topPlayers, setTopPlayers] = useState<PlayerRow[] | null>(null);
   const [extraPlayers, setExtraPlayers] = useState<PlayerRow[]>([]);
   const [recentMatches, setRecentMatches] = useState<MatchRow[] | null>(null);
+  const [loadingRecentMatches, setLoadingRecentMatches] = useState(true);
   const [allMatchesForStreaks, setAllMatchesForStreaks] = useState<MatchRow[]>([]);
   const [counts, setCounts] = useState({ players: 0, matches: 0, tournaments: 0 });
   const [upcoming, setUpcoming] = useState<TournamentRow | null>(null);
   const [active, setActive] = useState<TournamentRow | null>(null);
   const [activeMatches, setActiveMatches] = useState<MatchRow[]>([]);
+  const [loadingActiveTournament, setLoadingActiveTournament] = useState(true);
   const [news, setNews] = useState<NewsRow[]>([]);
   const [loadingNews, setLoadingNews] = useState(true);
   const [myRank, setMyRank] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [matchOfDay, setMatchOfDay] = useState<MatchRow | null>(null);
 
   // Refs para que el canal de Realtime no se re-suscriba en cada cambio de estado
   const topPlayersRef = useRef<PlayerRow[]>([]);
@@ -148,14 +155,14 @@ const Index = () => {
   useEffect(() => { topPlayersRef.current = topPlayers ?? []; }, [topPlayers]);
   useEffect(() => { extraPlayersRef.current = extraPlayers; }, [extraPlayers]);
 
-  // Mapa completo: top + extras (jugadores que aparecen en partidos pero no están en el top)
+  // Mapa completo: top + extras
   const playersById = useMemo(() => {
     const map: Record<string, PlayerRow> = {};
     [...(topPlayers ?? []), ...extraPlayers].forEach(p => { map[p.id] = p; });
     return map;
   }, [topPlayers, extraPlayers]);
 
-  /** Carga de jugadores faltantes referenciados por partidos */
+  /** Carga de jugadores faltantes referenciados por partidos (con comparación para evitar re-renders) */
   const fetchMissingPlayers = useCallback(async (
     knownIds: Set<string>,
     matchesArrays: MatchRow[][],
@@ -168,15 +175,19 @@ const Index = () => {
       })
     );
     if (missing.size === 0) {
-      setExtraPlayers([]);
+      if (extraPlayers.length > 0) setExtraPlayers([]);
       return;
     }
     const { data } = await supabase
       .from("players")
       .select("id, full_name, rating, avatar_url, wins, losses")
       .in("id", Array.from(missing));
-    setExtraPlayers((data as PlayerRow[]) ?? []);
-  }, []);
+    const newPlayers = (data as PlayerRow[]) ?? [];
+    // Comparación simple por ids para evitar actualizaciones innecesarias
+    const currentIds = new Set(extraPlayers.map(p => p.id));
+    const hasChanges = newPlayers.length !== extraPlayers.length || newPlayers.some(p => !currentIds.has(p.id));
+    if (hasChanges) setExtraPlayers(newPlayers);
+  }, [extraPlayers]);
 
   // Fetchers selectivos
   const fetchTopPlayers = useCallback(async () => {
@@ -190,6 +201,7 @@ const Index = () => {
   }, []);
 
   const fetchRecentMatches = useCallback(async () => {
+    setLoadingRecentMatches(true);
     const { data } = await supabase
       .from("matches")
       .select("*")
@@ -198,10 +210,12 @@ const Index = () => {
       .limit(10);
     const arr = (data as MatchRow[]) ?? [];
     setRecentMatches(arr);
+    setLoadingRecentMatches(false);
     return arr;
   }, []);
 
   const fetchActiveMatches = useCallback(async (tournamentId: string) => {
+    setLoadingActiveTournament(true);
     const { data } = await supabase
       .from("matches")
       .select("*")
@@ -209,14 +223,43 @@ const Index = () => {
       .order("match_order");
     const arr = (data as MatchRow[]) ?? [];
     setActiveMatches(arr);
+    setLoadingActiveTournament(false);
     return arr;
+  }, []);
+
+  // Consulta específica para el partido más reñido del día (sin depender de recentMatches)
+  const fetchMatchOfDay = useCallback(async () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const { data, error } = await supabase
+      .from("matches")
+      .select("*")
+      .gte("created_at", today.toISOString())
+      .lt("created_at", tomorrow.toISOString())
+      .not("player1_score", "is", null)
+      .not("player2_score", "is", null);
+
+    if (error || !data || data.length === 0) {
+      setMatchOfDay(null);
+      return;
+    }
+
+    const closest = (data as MatchRow[]).reduce((best, m) => {
+      const diff = Math.abs((m.player1_score ?? 0) - (m.player2_score ?? 0));
+      const bestDiff = Math.abs((best.player1_score ?? 0) - (best.player2_score ?? 0));
+      return diff < bestDiff ? m : best;
+    });
+    setMatchOfDay(closest);
   }, []);
 
   const fetchAll = useCallback(async () => {
     setError(null);
     setLoadingNews(true);
     try {
-      // News con fallback: intento con published; si la columna no existe (PGRST), reintento sin filtro
+      // News con fallback
       let newsData: NewsRow[] = [];
       try {
         const { data, error: nErr } = await supabase
@@ -238,7 +281,8 @@ const Index = () => {
       ] = await Promise.all([
         supabase.from("players").select("id, full_name, rating, avatar_url, wins, losses").order("rating", { ascending: false }).limit(20),
         supabase.from("matches").select("*").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(10),
-        supabase.from("matches").select("id, player1_id, player2_id, winner_id, created_at, tournament_id, player1_score, player2_score, round, match_order, set_scores, next_match_id").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(200),
+        // Aumentado a 1000 para streaks y sparklines completos
+        supabase.from("matches").select("id, player1_id, player2_id, winner_id, created_at, tournament_id, player1_score, player2_score, round, match_order, set_scores, next_match_id").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(1000),
         supabase.from("players").select("*", { count: "exact", head: true }),
         supabase.from("matches").select("*", { count: "exact", head: true }).not("winner_id", "is", null),
         supabase.from("tournaments").select("*", { count: "exact", head: true }),
@@ -264,21 +308,26 @@ const Index = () => {
         activeArr = await fetchActiveMatches(actRes.data.id);
       } else {
         setActiveMatches([]);
+        setLoadingActiveTournament(false);
       }
 
-      // Buscar jugadores fuera del top mencionados en cualquier partido visible
+      // Buscar jugadores fuera del top
       const knownIds = new Set(topData.map(p => p.id));
       await fetchMissingPlayers(knownIds, [recentData, activeArr]);
+
+      // Obtener partido del día
+      await fetchMatchOfDay();
     } catch (err: any) {
       console.error("Error cargando homepage:", err);
       setError("No se pudieron cargar los datos. Intentá recargar la página.");
-      // Salir del estado de loading
       setTopPlayers(prev => prev ?? []);
       setRecentMatches(prev => prev ?? []);
       setNews(prev => prev ?? []);
       setLoadingNews(false);
+      setLoadingRecentMatches(false);
+      setLoadingActiveTournament(false);
     }
-  }, [fetchActiveMatches, fetchMissingPlayers]);
+  }, [fetchActiveMatches, fetchMissingPlayers, fetchMatchOfDay]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
@@ -289,9 +338,9 @@ const Index = () => {
       .then(({ count }) => setMyRank((count ?? 0) + 1));
   }, [player]);
 
-  // Realtime — fetches selectivos
+  // Realtime optimizado (usa refs para evitar stale closures y resuscripciones)
   useEffect(() => {
-    const ch = supabase
+    const channel = supabase
       .channel("home-live")
       .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, async () => {
         const recent = await fetchRecentMatches();
@@ -302,15 +351,17 @@ const Index = () => {
         } else {
           await fetchMissingPlayers(known, [recent]);
         }
+        // Actualizar partido del día tras cambios
+        await fetchMatchOfDay();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "players" }, () => {
         fetchTopPlayers();
       })
       .subscribe();
-    return () => { supabase.removeChannel(ch); };
-  }, [active?.id, fetchRecentMatches, fetchActiveMatches, fetchTopPlayers, fetchMissingPlayers]);
+    return () => { supabase.removeChannel(channel); };
+  }, [active?.id, fetchRecentMatches, fetchActiveMatches, fetchTopPlayers, fetchMissingPlayers, fetchMatchOfDay]);
 
-  const countdown = useCountdown(upcoming?.starts_at ?? undefined);
+  const countdown = useCountdown(upcoming?.starts_at ? new Date(upcoming.starts_at) : undefined);
   const playersCount = useCountUp(counts.players);
   const matchesCount = useCountUp(counts.matches);
   const tournamentsCount = useCountUp(counts.tournaments);
@@ -324,28 +375,11 @@ const Index = () => {
       .slice(0, 5);
   }, [topPlayers, allMatchesForStreaks]);
 
-  // Match del día: el más reñido de hoy
-  const matchOfDay = useMemo<MatchRow | null>(() => {
-    if (!recentMatches || recentMatches.length === 0) return null;
-    const today = new Date().toDateString();
-    const todays = recentMatches.filter(m =>
-      new Date(m.created_at).toDateString() === today &&
-      m.player1_score !== null && m.player2_score !== null
-    );
-    if (todays.length === 0) return null;
-    return todays.reduce((best, m) => {
-      const diff = Math.abs((m.player1_score ?? 0) - (m.player2_score ?? 0));
-      const bestDiff = Math.abs((best.player1_score ?? 0) - (best.player2_score ?? 0));
-      return diff < bestDiff ? m : best;
-    });
-  }, [recentMatches]);
-
   const featuredNews = news[0];
   const otherNews = news.slice(1, 4);
 
   const loading = topPlayers === null;
 
-  // Progreso del torneo activo
   const activeProgress = useMemo(() => {
     if (!active || activeMatches.length === 0) return null;
     const total = activeMatches.length;
@@ -353,11 +387,19 @@ const Index = () => {
     return { completed, total, pct: Math.round((completed / total) * 100) };
   }, [active, activeMatches]);
 
-  // Delays para el podio (1° entra último)
   const podiumDelays = ["0ms", "200ms", "100ms"];
 
   return (
     <Layout>
+      <Helmet>
+        <title>Tenis de mesa Siete Palmas – Club oficial | Ranking, torneos y partidos</title>
+        <meta name="description" content="Club de tenis de mesa en Siete Palmas. Ranking en vivo, torneos, desafíos y resultados. Unite a la comunidad." />
+        <meta property="og:title" content="Tenis de mesa Siete Palmas" />
+        <meta property="og:description" content="Ranking, torneos y partidos en vivo del club." />
+        <meta property="og:image" content="/logo.png" />
+        <meta name="twitter:card" content="summary_large_image" />
+      </Helmet>
+
       {/* Banner de error */}
       {error && (
         <div className="bg-destructive/10 border-b border-destructive/30">
@@ -398,7 +440,7 @@ const Index = () => {
         <div className="absolute inset-0 hero-gradient" />
         <div className="absolute inset-0 opacity-30 mix-blend-overlay"
           style={{ backgroundImage: "radial-gradient(hsl(0 0% 100% / .15) 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
-        <PaddleIllustration className="absolute -right-10 -top-10 size-[420px] opacity-50 animate-float" />
+        <PaddleIllustration className="absolute -right-10 -top-10 size-[420px] opacity-50 animate-float" aria-hidden="true" />
 
         <div className="container relative py-12 md:py-20 text-primary-foreground">
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary-foreground/10 border border-primary-foreground/20 text-xs font-heading font-semibold uppercase tracking-wider animate-fade-in">
@@ -584,7 +626,7 @@ const Index = () => {
         </section>
       )}
 
-      {/* MATCH OF THE DAY */}
+      {/* MATCH OF THE DAY - ahora con consulta independiente */}
       {matchOfDay && (() => {
         const p1 = matchOfDay.player1_id ? playersById[matchOfDay.player1_id] : null;
         const p2 = matchOfDay.player2_id ? playersById[matchOfDay.player2_id] : null;
@@ -616,7 +658,7 @@ const Index = () => {
           <h2 className="font-heading font-bold text-2xl mb-4 flex items-center gap-2">
             <Swords className="text-primary" /> Partidos recientes
           </h2>
-          {loading ? (
+          {loadingRecentMatches ? (
             <div className="space-y-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-20 rounded-2xl" />)}</div>
           ) : !recentMatches || recentMatches.length === 0 ? (
             <EmptyState icon={Swords} title="Sin partidos cargados" hint="Los partidos aparecerán acá apenas se registre el primer resultado." />
@@ -686,7 +728,6 @@ const Index = () => {
             </Link>
           </div>
 
-          {/* Progreso */}
           {activeProgress && (
             <div className="glass-card p-4 mb-4 flex items-center gap-4">
               <div className="text-sm font-medium shrink-0 hidden sm:block">
@@ -710,7 +751,7 @@ const Index = () => {
         </section>
       )}
 
-      {/* NEWS */}
+      {/* NEWS con placeholders de imagen */}
       <section className="container pb-16">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-heading font-bold text-2xl">Noticias del club</h2>
@@ -730,10 +771,12 @@ const Index = () => {
           <div className="grid md:grid-cols-3 gap-4">
             {featuredNews && (
               <Link to={`/noticia/${featuredNews.id}`} className="md:col-span-2 md:row-span-2 glass-card glass-card-hover overflow-hidden group animate-fade-in">
-                <div className="aspect-[16/9] md:aspect-[16/10] overflow-hidden bg-muted">
-                  {featuredNews.image_url && (
+                <div className="aspect-[16/9] md:aspect-[16/10] overflow-hidden bg-muted flex items-center justify-center">
+                  {featuredNews.image_url ? (
                     <img src={featuredNews.image_url} alt={featuredNews.title} loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  ) : (
+                    <ImageIcon className="size-12 text-muted-foreground/50" />
                   )}
                 </div>
                 <div className="p-5">
@@ -748,10 +791,12 @@ const Index = () => {
             )}
             {otherNews.map((n, i) => (
               <Link key={n.id} to={`/noticia/${n.id}`} className="glass-card glass-card-hover overflow-hidden group animate-fade-in" style={{ animationDelay: `${(i + 1) * 80}ms` }}>
-                <div className="aspect-[16/10] overflow-hidden bg-muted">
-                  {n.image_url && (
+                <div className="aspect-[16/10] overflow-hidden bg-muted flex items-center justify-center">
+                  {n.image_url ? (
                     <img src={n.image_url} alt={n.title} loading="lazy"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  ) : (
+                    <ImageIcon className="size-10 text-muted-foreground/50" />
                   )}
                 </div>
                 <div className="p-4">
@@ -765,6 +810,38 @@ const Index = () => {
             ))}
           </div>
         )}
+      </section>
+
+      {/* NUEVA SECCIÓN: CÓMO LLEGAR + REDES SOCIALES */}
+      <section className="container pb-20">
+        <div className="glass-card p-5 md:p-7 grid md:grid-cols-2 gap-8">
+          <div>
+            <h2 className="font-heading font-bold text-2xl flex items-center gap-2 mb-4">
+              <MapPin className="text-primary" /> Cómo llegar
+            </h2>
+            <p className="text-muted-foreground mb-2">📍 Club Siete Palmas</p>
+            <p className="font-medium">Calle Falsa 123, Las Palmas de Gran Canaria</p>
+            <p className="text-sm text-muted-foreground mt-4">Horario: Lunes a viernes de 17 a 22 h</p>
+            <div className="mt-4 flex gap-4">
+              <a href="https://instagram.com/tuclub" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                <Instagram className="size-6" />
+              </a>
+              <a href="https://wa.me/34612345678" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
+                <svg className="size-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-5.46-4.45-9.91-9.91-9.91zm0 18.29c-1.49 0-2.95-.4-4.21-1.15l-.3-.18-3.12.82.83-3.04-.2-.31c-.84-1.29-1.28-2.77-1.28-4.29 0-4.46 3.63-8.09 8.09-8.09s8.09 3.63 8.09 8.09-3.63 8.09-8.09 8.09zm4.44-6.06c-.24-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.54.12-.16.24-.62.79-.76.95-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.38-.4-.52-.41-.14-.01-.29-.01-.44-.01-.16 0-.42.06-.64.31-.22.25-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.69 2.58 4.09 3.62.57.25 1.02.4 1.37.51.58.18 1.1.15 1.51.09.46-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28z"/></svg>
+              </a>
+              <a href="mailto:club@ejemplo.com" className="text-muted-foreground hover:text-primary transition-colors">
+                <Mail className="size-6" />
+              </a>
+            </div>
+          </div>
+          <div className="aspect-video rounded-xl overflow-hidden">
+            <iframe
+              src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3197.123456789!2d-15.5!3d28.1!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMjnCsDA2JzAwLjAiTiAxNcKwMzAnMDAuMCJX!5e0!3m2!1ses!2ses!4v1234567890"
+              width="100%" height="100%" style={{ border: 0 }} allowFullScreen loading="lazy"
+              title="Mapa del club"
+            ></iframe>
+          </div>
+        </div>
       </section>
 
       {/* FEATURE CTA cards */}
