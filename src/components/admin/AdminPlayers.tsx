@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, Edit2, Shield, ShieldOff } from "lucide-react";
+import { Search, Edit2, Shield, ShieldOff, RotateCcw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,18 +35,34 @@ export function AdminPlayers() {
     else { toast({ title: "Permisos actualizados" }); load(); }
   };
 
+  // Resetear rating de TODOS los jugadores a 600 (solo admin)
+  const resetAllRatings = async () => {
+    if (!confirm("¿Resetear el rating de TODOS los jugadores a 600 puntos? Esta acción no se puede deshacer.")) return;
+    const { error } = await supabase.from("players").update({ rating: 600 }).neq("id", ""); // actualiza todos
+    if (error) toast({ title: "Error", description: error.message, variant: "destructive" });
+    else { toast({ title: "Rating global reiniciado a 600" }); load(); }
+  };
+
   const filtered = (list ?? []).filter(p => p.full_name.toLowerCase().includes(q.toLowerCase()));
 
   return (
     <div>
-      <div className="relative max-w-md mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <input
-          value={q}
-          onChange={e => setQ(e.target.value)}
-          placeholder="Buscar jugador…"
-          className="w-full glass-card pl-10 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition"
-        />
+      <div className="flex flex-wrap justify-between gap-3 mb-4">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Buscar jugador…"
+            className="w-full glass-card pl-10 pr-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition"
+          />
+        </div>
+        <button
+          onClick={resetAllRatings}
+          className="tap-target inline-flex items-center gap-2 px-4 rounded-xl bg-destructive/10 text-destructive font-semibold hover:bg-destructive/20 transition"
+        >
+          <RotateCcw className="size-4" /> Resetear ratings a 600
+        </button>
       </div>
 
       {list === null ? (
@@ -71,7 +87,6 @@ export function AdminPlayers() {
                 onClick={() => toggleAdmin(p)}
                 className="tap-target inline-flex items-center justify-center size-10 rounded-lg bg-muted hover:bg-muted/80 transition"
                 aria-label={p.is_admin ? "Quitar admin" : "Hacer admin"}
-                title={p.is_admin ? "Quitar admin" : "Hacer admin"}
               >
                 {p.is_admin ? <ShieldOff className="size-4 text-destructive" /> : <Shield className="size-4 text-primary" />}
               </button>
@@ -130,7 +145,7 @@ function PlayerForm({ player, onClose, onSaved }: { player: P; onClose: () => vo
         <Field label="Bio"><textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} className={inputCls} /></Field>
         <div className="grid sm:grid-cols-2 gap-3">
           <Field label="Teléfono"><input value={phone} onChange={e => setPhone(e.target.value)} className={inputCls} /></Field>
-          <Field label="Rating"><input type="number" value={rating} onChange={e => setRating(Number(e.target.value))} className={inputCls} /></Field>
+          <Field label="Rating (ELO)"><input type="number" value={rating} onChange={e => setRating(Number(e.target.value))} className={inputCls} /></Field>
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <button onClick={onClose} className="tap-target px-4 rounded-lg bg-muted hover:bg-muted/80 font-medium">Cancelar</button>
