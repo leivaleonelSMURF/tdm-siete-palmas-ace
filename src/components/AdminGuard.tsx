@@ -19,7 +19,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user) return <Navigate to="/admin" replace />;
 
   if (!player?.is_admin) {
     return (
