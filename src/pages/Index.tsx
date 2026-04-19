@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { format, formatDistanceToNow } from "date-fns";
@@ -9,7 +8,6 @@ import {
   Sun, Cloud, CloudRain, CloudSnow, CloudFog, Zap, LogIn,
   AlertTriangle, Activity, Image as ImageIcon, Instagram, Mail, MapPin,
 } from "lucide-react";
-import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useWeather, weatherLabel } from "@/hooks/useWeather";
@@ -60,7 +58,6 @@ function calcStreak(playerId: string, matches: MatchRow[]): number {
   return s;
 }
 
-/** Sparkline determinística desde rating + win/loss recientes */
 function buildSparkValues(p: PlayerRow, matches: MatchRow[]): number[] {
   const mine = matches
     .filter(m => m.winner_id && (m.player1_id === p.id || m.player2_id === p.id))
@@ -86,7 +83,6 @@ function PodiumCard({
   const platformH = ["h-16", "h-24", "h-10"];
   const topPad = ["pt-8", "pt-2", "pt-14"];
   const spark = useMemo(() => buildSparkValues(player, matchesForSpark), [player, matchesForSpark]);
-  // Mejora de contraste en el podio: añadir sombra al texto
   const textShadow = "drop-shadow(0 1px 1px rgba(0,0,0,0.3))";
   return (
     <div className={cn("flex flex-col items-center animate-slide-up", topPad[displayIdx])} style={{ animationDelay: delay }}>
@@ -149,20 +145,18 @@ const Index = () => {
   const [error, setError] = useState<string | null>(null);
   const [matchOfDay, setMatchOfDay] = useState<MatchRow | null>(null);
 
-  // Refs para que el canal de Realtime no se re-suscriba en cada cambio de estado
+  // Refs para realtime
   const topPlayersRef = useRef<PlayerRow[]>([]);
   const extraPlayersRef = useRef<PlayerRow[]>([]);
   useEffect(() => { topPlayersRef.current = topPlayers ?? []; }, [topPlayers]);
   useEffect(() => { extraPlayersRef.current = extraPlayers; }, [extraPlayers]);
 
-  // Mapa completo: top + extras
   const playersById = useMemo(() => {
     const map: Record<string, PlayerRow> = {};
     [...(topPlayers ?? []), ...extraPlayers].forEach(p => { map[p.id] = p; });
     return map;
   }, [topPlayers, extraPlayers]);
 
-  /** Carga de jugadores faltantes referenciados por partidos (con comparación para evitar re-renders) */
   const fetchMissingPlayers = useCallback(async (
     knownIds: Set<string>,
     matchesArrays: MatchRow[][],
@@ -183,13 +177,11 @@ const Index = () => {
       .select("id, full_name, rating, avatar_url, wins, losses")
       .in("id", Array.from(missing));
     const newPlayers = (data as PlayerRow[]) ?? [];
-    // Comparación simple por ids para evitar actualizaciones innecesarias
     const currentIds = new Set(extraPlayers.map(p => p.id));
     const hasChanges = newPlayers.length !== extraPlayers.length || newPlayers.some(p => !currentIds.has(p.id));
     if (hasChanges) setExtraPlayers(newPlayers);
   }, [extraPlayers]);
 
-  // Fetchers selectivos
   const fetchTopPlayers = useCallback(async () => {
     const { data } = await supabase
       .from("players")
@@ -227,7 +219,6 @@ const Index = () => {
     return arr;
   }, []);
 
-  // Consulta específica para el partido más reñido del día (sin depender de recentMatches)
   const fetchMatchOfDay = useCallback(async () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -259,7 +250,6 @@ const Index = () => {
     setError(null);
     setLoadingNews(true);
     try {
-      // News con fallback
       let newsData: NewsRow[] = [];
       try {
         const { data, error: nErr } = await supabase
@@ -281,7 +271,6 @@ const Index = () => {
       ] = await Promise.all([
         supabase.from("players").select("id, full_name, rating, avatar_url, wins, losses").order("rating", { ascending: false }).limit(20),
         supabase.from("matches").select("*").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(10),
-        // Aumentado a 1000 para streaks y sparklines completos
         supabase.from("matches").select("id, player1_id, player2_id, winner_id, created_at, tournament_id, player1_score, player2_score, round, match_order, set_scores, next_match_id").not("winner_id", "is", null).order("created_at", { ascending: false }).limit(1000),
         supabase.from("players").select("*", { count: "exact", head: true }),
         supabase.from("matches").select("*", { count: "exact", head: true }).not("winner_id", "is", null),
@@ -311,11 +300,8 @@ const Index = () => {
         setLoadingActiveTournament(false);
       }
 
-      // Buscar jugadores fuera del top
       const knownIds = new Set(topData.map(p => p.id));
       await fetchMissingPlayers(knownIds, [recentData, activeArr]);
-
-      // Obtener partido del día
       await fetchMatchOfDay();
     } catch (err: any) {
       console.error("Error cargando homepage:", err);
@@ -329,16 +315,18 @@ const Index = () => {
     }
   }, [fetchActiveMatches, fetchMissingPlayers, fetchMatchOfDay]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+    // Establecer título de la página (alternativa simple a react-helmet)
+    document.title = "Tenis de mesa Siete Palmas – Club oficial | Ranking, torneos y partidos";
+  }, [fetchAll]);
 
-  // My rank
   useEffect(() => {
     if (!player) { setMyRank(null); return; }
     supabase.from("players").select("*", { count: "exact", head: true }).gt("rating", player.rating)
       .then(({ count }) => setMyRank((count ?? 0) + 1));
   }, [player]);
 
-  // Realtime optimizado (usa refs para evitar stale closures y resuscripciones)
   useEffect(() => {
     const channel = supabase
       .channel("home-live")
@@ -351,7 +339,6 @@ const Index = () => {
         } else {
           await fetchMissingPlayers(known, [recent]);
         }
-        // Actualizar partido del día tras cambios
         await fetchMatchOfDay();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "players" }, () => {
@@ -377,7 +364,6 @@ const Index = () => {
 
   const featuredNews = news[0];
   const otherNews = news.slice(1, 4);
-
   const loading = topPlayers === null;
 
   const activeProgress = useMemo(() => {
@@ -391,15 +377,6 @@ const Index = () => {
 
   return (
     <Layout>
-      <Helmet>
-        <title>Tenis de mesa Siete Palmas – Club oficial | Ranking, torneos y partidos</title>
-        <meta name="description" content="Club de tenis de mesa en Siete Palmas. Ranking en vivo, torneos, desafíos y resultados. Unite a la comunidad." />
-        <meta property="og:title" content="Tenis de mesa Siete Palmas" />
-        <meta property="og:description" content="Ranking, torneos y partidos en vivo del club." />
-        <meta property="og:image" content="/logo.png" />
-        <meta name="twitter:card" content="summary_large_image" />
-      </Helmet>
-
       {/* Banner de error */}
       {error && (
         <div className="bg-destructive/10 border-b border-destructive/30">
@@ -626,7 +603,7 @@ const Index = () => {
         </section>
       )}
 
-      {/* MATCH OF THE DAY - ahora con consulta independiente */}
+      {/* MATCH OF THE DAY */}
       {matchOfDay && (() => {
         const p1 = matchOfDay.player1_id ? playersById[matchOfDay.player1_id] : null;
         const p2 = matchOfDay.player2_id ? playersById[matchOfDay.player2_id] : null;
@@ -812,7 +789,7 @@ const Index = () => {
         )}
       </section>
 
-      {/* NUEVA SECCIÓN: CÓMO LLEGAR + REDES SOCIALES */}
+      {/* SECCIÓN: CÓMO LLEGAR + REDES SOCIALES */}
       <section className="container pb-20">
         <div className="glass-card p-5 md:p-7 grid md:grid-cols-2 gap-8">
           <div>
@@ -827,7 +804,9 @@ const Index = () => {
                 <Instagram className="size-6" />
               </a>
               <a href="https://wa.me/34612345678" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors">
-                <svg className="size-6" viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-5.46-4.45-9.91-9.91-9.91zm0 18.29c-1.49 0-2.95-.4-4.21-1.15l-.3-.18-3.12.82.83-3.04-.2-.31c-.84-1.29-1.28-2.77-1.28-4.29 0-4.46 3.63-8.09 8.09-8.09s8.09 3.63 8.09 8.09-3.63 8.09-8.09 8.09zm4.44-6.06c-.24-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.54.12-.16.24-.62.79-.76.95-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.38-.4-.52-.41-.14-.01-.29-.01-.44-.01-.16 0-.42.06-.64.31-.22.25-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.69 2.58 4.09 3.62.57.25 1.02.4 1.37.51.58.18 1.1.15 1.51.09.46-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28z"/></svg>
+                <svg className="size-6" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2.05 22l5.25-1.38c1.45.79 3.08 1.21 4.74 1.21 5.46 0 9.91-4.45 9.91-9.91 0-5.46-4.45-9.91-9.91-9.91zm0 18.29c-1.49 0-2.95-.4-4.21-1.15l-.3-.18-3.12.82.83-3.04-.2-.31c-.84-1.29-1.28-2.77-1.28-4.29 0-4.46 3.63-8.09 8.09-8.09s8.09 3.63 8.09 8.09-3.63 8.09-8.09 8.09zm4.44-6.06c-.24-.12-1.44-.71-1.66-.79-.22-.08-.38-.12-.54.12-.16.24-.62.79-.76.95-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.01-.37.11-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.38-.4-.52-.41-.14-.01-.29-.01-.44-.01-.16 0-.42.06-.64.31-.22.25-.84.82-.84 2 0 1.18.86 2.32.98 2.48.12.16 1.69 2.58 4.09 3.62.57.25 1.02.4 1.37.51.58.18 1.1.15 1.51.09.46-.07 1.44-.59 1.64-1.16.2-.57.2-1.06.14-1.16-.06-.1-.22-.16-.46-.28z"/>
+                </svg>
               </a>
               <a href="mailto:club@ejemplo.com" className="text-muted-foreground hover:text-primary transition-colors">
                 <Mail className="size-6" />
