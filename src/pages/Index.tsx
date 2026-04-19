@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useCountUp } from "@/hooks/useCountUp";
 import { useCountdown } from "@/hooks/useCountdown";
 import { cn } from "@/lib/utils";
+import AnimatedList from "@/components/AnimatedList";
 
 type PlayerRow = {
   id: string; full_name: string; rating: number;
@@ -779,6 +780,28 @@ const Index = () => {
           </div>
         )}
       </section>
+
+      {/* LISTA ANIMADA DE TOP JUGADORES */}
+      {topPlayers && topPlayers.length > 0 && (
+        <section className="container pb-16">
+          <h2 className="font-heading font-bold text-2xl mb-4 flex items-center gap-2">
+            <Users className="text-primary" /> Top jugadores (lista animada)
+          </h2>
+          <div className="max-w-md mx-auto">
+            <AnimatedList
+              items={topPlayers.slice(0, 10).map(p => `${p.full_name} · ${p.rating} pts`)}
+              onItemSelect={(item, index) => {
+                const playerId = topPlayers[index]?.id;
+                if (playerId) window.location.href = `/jugador/${playerId}`;
+              }}
+              showGradients={true}
+              enableArrowNavigation={true}
+              displayScrollbar={true}
+              itemClassName="hover:bg-primary/5 transition"
+            />
+          </div>
+        </section>
+      )}
 
       {/* NUEVA SECCIÓN: SOBRE EL TENIS DE MESA */}
       <section className="container pb-20">
